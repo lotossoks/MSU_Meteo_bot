@@ -1,0 +1,5 @@
+pyTelegramBotAPI==4.15.4
+pandas==2.2.0
+matplotlib==3.8.2
+plotly==5.18.0
+kaleido==0.1.0.post1
