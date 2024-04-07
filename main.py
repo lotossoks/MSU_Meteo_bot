@@ -327,7 +327,7 @@ def choose_columns(call):
         user_info_open = load_json('user_info.json')
         ava_col = config_devices_open[user_info_open[ID_user]['device']]['cols']
         if 'selected_columns' not in user_info_open[ID_user].keys():
-            user_info_open[ID_user]['selected_columns'] = ava_col
+            user_info_open[ID_user]['selected_columns'] = []
         upload_json('user_info.json', user_info_open)
         selected_columns = user_info_open[ID_user]['selected_columns']
         bot.send_message(call.chat.id, 'Столбцы для выбора:',
