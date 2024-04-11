@@ -1,1 +1,26 @@
-{"AE33-S09-01249": {"last_record_file": "data/AE33-S09-01249/2024_01_AE33-S09-01249.csv", "first_record_date": "2023-07-01"}, "TCA08": {"last_record_file": "data/TCA08/2024-01_OnLineResult.csv", "first_record_date": "2023-06-30"}, "LVS": {"last_record_file": "data/LVS/2024_01_lvs_data.csv", "first_record_date": "2023-07-01"}, "PNS": {"last_record_file": "data/PNS/2024_01_pns_data.csv", "first_record_date": "2023-07-01"}, "Web_MEM": {"last_record_file": "data/Web_MEM/2024_01_mav_mos_mgu.csv", "first_record_date": "2023-07-01"}, "AE33-S04-00360": {"last_record_file": "data/AE33-S04-00360/2022_10_AE33-S04-00360.csv", "first_record_date": "2022-10-25"}}
+{
+  "AE33-S09-01249": {
+    "last_record_file": "data/AE33-S09-01249/2024_01_AE33-S09-01249.csv",
+    "first_record_date": "2023-07-01"
+  },
+  "TCA08": {
+    "last_record_file": "data/TCA08/2024-01_OnLineResult.csv",
+    "first_record_date": "2023-06-30"
+  },
+  "LVS": {
+    "last_record_file": "data/LVS/2024_01_lvs_data.csv",
+    "first_record_date": "2023-07-01"
+  },
+  "PNS": {
+    "last_record_file": "data/PNS/2024_01_pns_data.csv",
+    "first_record_date": "2023-07-01"
+  },
+  "Web_MEM": {
+    "last_record_file": "data/Web_MEM/2024_01_mav_mos_mgu.csv",
+    "first_record_date": "2023-07-01"
+  },
+  "AE33-S04-00360": {
+    "last_record_file": "data/AE33-S04-00360/2022_10_AE33-S04-00360.csv",
+    "first_record_date": "2022-10-25"
+  }
+}

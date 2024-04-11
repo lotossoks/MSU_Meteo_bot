@@ -8,9 +8,10 @@ import config
 import telebot
 import json
 import os
-import shutil
 import pandas as pd
 import re
+from yadisk import YaDisk
+from dotenv import load_dotenv
 
 
 def load_json(path):
@@ -23,66 +24,41 @@ def upload_json(path, to_save):
 
 
 bot = telebot.TeleBot(config.token)
-config_devices_open = load_json('config_devices.json')
-list_devices = list(config_devices_open.keys())
-disk_path = 'external_data'
-main_path = 'data'
-conn = sqlite3.connect('database.db')
-cursor = conn.cursor()
-cursor.execute('SELECT name, id FROM complexes')
-dict_complexes = {name: ID for name, ID in cursor.fetchall()}
+main_path = "data"
+path_db = "../MSU_aerosol_site/msu_aerosol/database.db"
+load_dotenv("../MSU_aerosol_site/.env")
+yadisk_token = os.getenv("YADISK_TOKEN")
+disk = YaDisk(token=yadisk_token)
 
 
-@bot.message_handler(commands=['upload_all_files_from_disk'])
-def upload_all_files_from_disk(message):
-    for name_folder in list_devices:
-        for name_file in os.listdir(f'{disk_path}/{name_folder}'):
-            if name_file.endswith('.csv'):
-                if not os.path.exists(f'{main_path}/{name_folder}'):
-                    os.makedirs(f'{main_path}/{name_folder}')
-                shutil.copy(f'{disk_path}/{name_folder}/{name_file}', f'{main_path}/{name_folder}/{name_file}')
-    for name_folder in os.listdir(f'{main_path}'):
-        for name_file in os.listdir(f'{main_path}/{name_folder}'):
-            preprocessing_one_file(f"{main_path}/{name_folder}/{name_file}")
+def make_list_short_names_devices():
+    conn = sqlite3.connect(path_db)
+    cursor = conn.cursor()
+    list_short_names = list(map(lambda x: x[0], cursor.execute('SELECT link FROM devices WHERE show=TRUE').fetchall()))
+    return list_short_names
 
 
-def preprocessing_one_file(path):
-    _, device, file_name = path.split('/')
-    df = pd.read_csv(path, sep=None, engine='python', decimal=',')
-    config_device_open = config_devices_open[device]
-    time_col = config_device_open['time_cols']
-    df = df[[time_col] + config_device_open['cols']]
-    df = df.map(lambda x: x.strip() if isinstance(x, str) else x)
-    if not os.path.exists(f'proc_data/{device}'):
-        os.makedirs(f'proc_data/{device}')
-    df[time_col] = pd.to_datetime(df[time_col], format=config_device_open['format'])
-    df = df.sort_values(by=time_col)
-    diff_mode = df[time_col].diff().mode().values[0] * 1.1
-    new_rows = []
-    for i in range(len(df) - 1):
-        diff = (df.loc[i + 1, time_col] - df.loc[i, time_col])
-        if diff > diff_mode:
-            new_date1 = df.loc[i, time_col] + pd.Timedelta(seconds=1)
-            new_date2 = df.loc[i + 1, time_col] - pd.Timedelta(seconds=1)
-            new_row1 = {time_col: new_date1}
-            new_row2 = {time_col: new_date2}
-            new_rows.extend([new_row1, new_row2])
-    df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
-    df = df.sort_values(by=time_col)
-    name = re.split("[-_]", file_name)
-    df.to_csv(f'proc_data/{device}/{name[0]}_{name[1]}.csv', index=False)
-    return f'proc_data/{device}/{name[0]}_{name[1]}.csv'
+def make_list_full_names_devices():
+    conn = sqlite3.connect(path_db)
+    cursor = conn.cursor()
+    list_full_names = list(map(lambda x: disk.get_public_meta(x[0]),
+                               cursor.execute('SELECT link FROM devices WHERE show=TRUE').fetchall()))
+
+    return list_full_names
+
+
+
 
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    ID_user = str(message.from_user.id)
+    id_user = str(message.from_user.id)
     user_info_open = load_json('user_info.json')
-    if ID_user not in user_info_open.keys():
-        user_info_open[ID_user] = {}
-    user_info_open[ID_user]['update_quick_access'] = False
-    user_info_open[ID_user].pop('selected_columns', None)
-    user_info_open[ID_user]['device_to_choose'] = []
+    if id_user not in user_info_open.keys():
+        user_info_open[id_user] = {}
+    user_info_open[id_user]['update_quick_access'] = False
+    user_info_open[id_user].pop('selected_columns', None)
+    user_info_open[id_user]['device_to_choose'] = []
     upload_json('user_info.json', user_info_open)
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(types.KeyboardButton("Просмотр данных с приборов"))
@@ -105,10 +81,10 @@ def choice_devices_or_complexes(message):
 @bot.message_handler(func=lambda
         message: message.text == "Быстрый доступ")
 def quick_access(message):
-    ID_user = str(message.from_user.id)
+    id_user = str(message.from_user.id)
     markup = types.ReplyKeyboardMarkup(row_width=1)
     markup.add('Настроить быстрый доступ')
-    if 'quick_access' in load_json('user_info.json')[ID_user].keys():
+    if 'quick_access' in load_json('user_info.json')[id_user].keys():
         markup.add('Отрисовка графика')
     bot.send_message(message.chat.id, "Выберите действие", reply_markup=markup)
 
@@ -121,9 +97,9 @@ def logic_draw_plot(message):
 @bot.message_handler(func=lambda
         message: message.text == "Настроить быстрый доступ")
 def update_quick_access(message):
-    ID_user = str(message.from_user.id)
+    id_user = str(message.from_user.id)
     d = load_json('user_info.json').copy()
-    d[ID_user]['update_quick_access'] = True
+    d[id_user]['update_quick_access'] = True
     upload_json('user_info.json', d)
     choice_devices_or_complexes(message)
 
@@ -131,35 +107,39 @@ def update_quick_access(message):
 @bot.message_handler(func=lambda
         message: message.text == "Просмотр всех приборов")
 def all_devices(message):
-    ID_user = str(message.from_user.id)
+    list_devices = make_list_short_names_devices()
+    id_user = str(message.from_user.id)
     user_info_open = load_json('user_info.json')
-    if not user_info_open[ID_user]['device_to_choose']:
-        user_info_open[ID_user]['device_to_choose'] = list_devices
+    if not user_info_open[id_user]['device_to_choose']:
+        user_info_open[id_user]['device_to_choose'] = list_devices
         upload_json('user_info.json', user_info_open)
     markup = types.ReplyKeyboardMarkup(row_width=1)
-    markup.add(*list(map(lambda x: types.KeyboardButton(x), user_info_open[ID_user]['device_to_choose'])))
+    markup.add(*list(map(lambda x: types.KeyboardButton(x), user_info_open[id_user]['device_to_choose'])))
     bot.send_message(message.chat.id, "Выберите прибор", reply_markup=markup)
 
 
 @bot.message_handler(func=lambda
         message: message.text == "Просмотр приборов по комплексам")
 def all_complexes(message):
+    list_complexes = make_list_complexes()
     markup = types.ReplyKeyboardMarkup(row_width=1)
-    markup.add(*list(map(lambda x: types.KeyboardButton(x), dict_complexes.keys())))
+    markup.add(*list(map(lambda x: types.KeyboardButton(x), list_complexes)))
     bot.send_message(message.chat.id, "Выберите комплекс", reply_markup=markup)
 
 
 @bot.message_handler(func=lambda
-        message: message.text in dict_complexes.keys())
+        message: message.text in make_list_complexes())
 def choose_one_complex(message):
-    ID_user = str(message.from_user.id)
+    id_user = str(message.from_user.id)
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
-    ID_complex = dict_complexes[message.text]
-    cursor.execute("SELECT name_on_disk FROM devices WHERE complex_id = ? AND name_on_disk IN ({})".format(
-        ','.join('?' for _ in list_devices)), [ID_complex] + list_devices)
+    complex_id = cursor.execute(f"SELECT id FROM complexes WHERE name = {message.text}").fetchone()
+    list_devices_full_name = list(map(lambda x: disk.get_public_meta(x[0]),
+                                      cursor.execute(f"SELECT link FROM devices WHERE complex_id = {complex_id}")))
+    list_devices_short_name =
+    cursor.execute(f"SELECT link FROM devices WHERE complex_id = {complex_id}")
     user_info_open = load_json('user_info.json')
-    user_info_open[ID_user]['device_to_choose'] = list(map(lambda x: x[0], list(cursor.fetchall())))
+    user_info_open[id_user]['device_to_choose'] = list(map(lambda x: x[0], list(cursor.fetchall())))
     upload_json('user_info.json', user_info_open)
     all_devices(message)
 
@@ -370,7 +350,8 @@ def concat_files(message):
     time_col = device_dict['time_cols']
     combined_data[time_col] = pd.to_datetime(combined_data[time_col], format="%Y-%m-%d %H:%M:%S")
     combined_data = combined_data[
-        (combined_data[time_col] >= begin_record_date) & (combined_data[time_col] <= end_record_date + timedelta(days=1))]
+        (combined_data[time_col] >= begin_record_date) & (
+                combined_data[time_col] <= end_record_date + timedelta(days=1))]
     combined_data.set_index(time_col, inplace=True)
     combined_data = combined_data.replace(',', '.', regex=True).astype(float)
     if (end_record_date - begin_record_date).days > 2 and len(combined_data) >= 500:
