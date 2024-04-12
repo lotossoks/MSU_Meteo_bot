@@ -13,8 +13,9 @@ import plotly.graph_objects as go
 from matplotlib import pyplot as plt
 
 bot = telebot.TeleBot(config.token)
-path_db = "../MSU_aerosol_site/msu_aerosol/database.db"
-load_dotenv("../MSU_aerosol_site/.env")
+path_to_site = "../MSU_aerosol_site"
+path_db = f"{path_to_site}/msu_aerosol/database.db"
+load_dotenv(f"{path_to_site}/.env")
 yadisk_token = os.getenv("YADISK_TOKEN")
 disk = YaDisk(token=yadisk_token)
 
@@ -59,11 +60,11 @@ def get_color(col):
 
 
 def make_range(device):
-    list_files = os.listdir(f"../MSU_aerosol_site/msu_aerosol/proc_data/{device}")
+    list_files = os.listdir(f"{path_to_site}/msu_aerosol/proc_data/{device}")
     last_record_date = pd.to_datetime(
-        pd.read_csv(f"../MSU_aerosol_site/msu_aerosol/proc_data/{device}/{max(list_files)}")[get_time_col(device)].iloc[-1])
+        pd.read_csv(f"{path_to_site}/msu_aerosol/proc_data/{device}/{max(list_files)}")[get_time_col(device)].iloc[-1])
     first_record_date = pd.to_datetime(
-        pd.read_csv(f"../MSU_aerosol_site/msu_aerosol/proc_data/{device}/{min(list_files)}")[get_time_col(device)].iloc[0])
+        pd.read_csv(f"{path_to_site}/msu_aerosol/proc_data/{device}/{min(list_files)}")[get_time_col(device)].iloc[0])
     return first_record_date, last_record_date
 
 
@@ -141,7 +142,7 @@ def choose_default_time_delay(message):
     delay = 2 if message.text == '2 дня' else 7 if message.text == '7 дней' else 14 if message.text == '14 дней' else 31
     user_info_open = json.load(open('user_info.json', 'r'))
     device = user_info_open[id_user]['device']
-    file_name = max(os.listdir(f"../MSU_aerosol_site/msu_aerosol/proc_data/{device}"))
+    file_name = max(os.listdir(f"{path_to_site}/msu_aerosol/proc_data/{device}"))
     end_record_date = pd.to_datetime(pd.read_csv(f"proc_data/{device}/{file_name}")[get_time_col(device)].iloc[-1])
     user_info_open[id_user]['begin_record_date'] = str(end_record_date - timedelta(days=delay))
     user_info_open[id_user]['end_record_date'] = str(end_record_date)
@@ -224,7 +225,7 @@ def concat_files(message):
     while current_date <= end_record_date + timedelta(days=100):
         try:
             data = pd.read_csv(
-                f"../MSU_aerosol_site/msu_aerosol/proc_data/{device}/{current_date.strftime('%Y_%m')}.csv")
+                f"{path_to_site}/msu_aerosol/proc_data/{device}/{current_date.strftime('%Y_%m')}.csv")
             combined_data = pd.concat([combined_data, data], ignore_index=True)
             current_date += timedelta(days=29)
         except FileNotFoundError:
