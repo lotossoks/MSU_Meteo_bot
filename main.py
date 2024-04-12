@@ -1,21 +1,22 @@
-import sqlite3
-from datetime import datetime, timedelta
-from matplotlib import pyplot as plt
+import os
 from telebot import types
-from telebot.types import CallbackQuery
-import plotly.graph_objects as go
 import config
 import telebot
 import json
-import os
-import pandas as pd
-import re
+import sqlite3
 from yadisk import YaDisk
 from dotenv import load_dotenv
+import pandas as pd
+from datetime import timedelta, datetime
+from telebot.types import CallbackQuery
+import plotly.graph_objects as go
+from matplotlib import pyplot as plt
 
-
-def load_json(path):
-    return json.load(open(path, 'r'))
+bot = telebot.TeleBot(config.token)
+path_db = "../MSU_aerosol_site/msu_aerosol/database.db"
+load_dotenv("../MSU_aerosol_site/.env")
+yadisk_token = os.getenv("YADISK_TOKEN")
+disk = YaDisk(token=yadisk_token)
 
 
 def upload_json(path, to_save):
@@ -23,37 +24,67 @@ def upload_json(path, to_save):
         json.dump(to_save, outfile)
 
 
-bot = telebot.TeleBot(config.token)
-main_path = "data"
-path_db = "../MSU_aerosol_site/msu_aerosol/database.db"
-load_dotenv("../MSU_aerosol_site/.env")
-yadisk_token = os.getenv("YADISK_TOKEN")
-disk = YaDisk(token=yadisk_token)
-
-
-def make_list_short_names_devices():
+def make_list_short_name_devices():
     conn = sqlite3.connect(path_db)
     cursor = conn.cursor()
-    list_short_names = list(map(lambda x: x[0], cursor.execute('SELECT link FROM devices WHERE show=TRUE').fetchall()))
-    return list_short_names
+    return list(map(lambda x: x[0], cursor.execute('SELECT name FROM devices WHERE show=TRUE').fetchall()))
 
 
-def make_list_full_names_devices():
+def short_name_to_full_name_device(short_name):
     conn = sqlite3.connect(path_db)
     cursor = conn.cursor()
-    list_full_names = list(map(lambda x: disk.get_public_meta(x[0]),
-                               cursor.execute('SELECT link FROM devices WHERE show=TRUE').fetchall()))
-
-    return list_full_names
+    return cursor.execute(f'SELECT full_name FROM devices WHERE name="{short_name}"').fetchone()[0]
 
 
+def get_time_col(device):
+    conn = sqlite3.connect(path_db)
+    cursor = conn.cursor()
+    device_id = cursor.execute(f'SELECT id FROM devices WHERE full_name = "{device}"').fetchone()[0]
+    return cursor.execute(f'SELECT name FROM time_column WHERE device_id = "{device_id}" AND use=1').fetchone()[0]
 
+
+def make_list_cols(device):
+    conn = sqlite3.connect(path_db)
+    cursor = conn.cursor()
+    device_id = cursor.execute(f'SELECT id FROM devices WHERE full_name = "{device}"').fetchone()[0]
+    return list(
+        map(lambda x: x[0],
+            cursor.execute(f'SELECT name FROM column WHERE device_id = "{device_id}" AND use=1').fetchall()))
+
+
+def get_color(col):
+    conn = sqlite3.connect(path_db)
+    cursor = conn.cursor()
+    return cursor.execute(f'SELECT color FROM column WHERE name = "{col}"').fetchone()[0]
+
+
+def make_range(device):
+    list_files = os.listdir(f"../MSU_aerosol_site/msu_aerosol/proc_data/{device}")
+    last_record_date = pd.to_datetime(
+        pd.read_csv(f"../MSU_aerosol_site/msu_aerosol/proc_data/{device}/{max(list_files)}")[get_time_col(device)].iloc[-1])
+    first_record_date = pd.to_datetime(
+        pd.read_csv(f"../MSU_aerosol_site/msu_aerosol/proc_data/{device}/{min(list_files)}")[get_time_col(device)].iloc[0])
+    return first_record_date, last_record_date
+
+
+def make_list_complexes():
+    conn = sqlite3.connect(path_db)
+    cursor = conn.cursor()
+    return list(map(lambda x: x[0], cursor.execute('SELECT name FROM complexes').fetchall()))
+
+
+def get_devices_from_complex(complex):
+    conn = sqlite3.connect(path_db)
+    cursor = conn.cursor()
+    complex_id = cursor.execute(f'SELECT id FROM complexes WHERE name = "{complex}"').fetchone()[0]
+    return list(map(lambda x: x[0],
+                    cursor.execute(f'SELECT name FROM devices WHERE show=1 AND complex_id="{complex_id}"').fetchall()))
 
 
 @bot.message_handler(commands=['start'])
 def start(message):
     id_user = str(message.from_user.id)
-    user_info_open = load_json('user_info.json')
+    user_info_open = json.load(open('user_info.json', 'r'))
     if id_user not in user_info_open.keys():
         user_info_open[id_user] = {}
     user_info_open[id_user]['update_quick_access'] = False
@@ -63,120 +94,37 @@ def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(types.KeyboardButton("Просмотр данных с приборов"))
     markup.add(types.KeyboardButton("Быстрый доступ"))
-    bot.send_message(message.chat.id,
-                     text=f"Начните работу с приборами", reply_markup=markup)
+    bot.send_message(message.chat.id, text=f"Начните работу с приборами", reply_markup=markup)
 
 
-@bot.message_handler(
-    func=lambda message: message.text == "Просмотр данных с приборов"
-)
+@bot.message_handler(func=lambda message: message.text == "Просмотр данных с приборов")
 def choice_devices_or_complexes(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(types.KeyboardButton("Просмотр всех приборов"))
     markup.add(types.KeyboardButton("Просмотр приборов по комплексам"))
-    bot.send_message(message.chat.id,
-                     text=f"Каким образом выбрать прибор?", reply_markup=markup)
+    bot.send_message(message.chat.id, text=f"Каким образом выбрать прибор?", reply_markup=markup)
 
 
-@bot.message_handler(func=lambda
-        message: message.text == "Быстрый доступ")
-def quick_access(message):
-    id_user = str(message.from_user.id)
-    markup = types.ReplyKeyboardMarkup(row_width=1)
-    markup.add('Настроить быстрый доступ')
-    if 'quick_access' in load_json('user_info.json')[id_user].keys():
-        markup.add('Отрисовка графика')
-    bot.send_message(message.chat.id, "Выберите действие", reply_markup=markup)
-
-
-@bot.message_handler(func=lambda message: message.text == 'Отрисовка графика')
-def logic_draw_plot(message):
-    concat_files(message)
-
-
-@bot.message_handler(func=lambda
-        message: message.text == "Настроить быстрый доступ")
-def update_quick_access(message):
-    id_user = str(message.from_user.id)
-    d = load_json('user_info.json').copy()
-    d[id_user]['update_quick_access'] = True
-    upload_json('user_info.json', d)
-    choice_devices_or_complexes(message)
-
-
-@bot.message_handler(func=lambda
-        message: message.text == "Просмотр всех приборов")
+@bot.message_handler(func=lambda message: message.text == "Просмотр всех приборов")
 def all_devices(message):
-    list_devices = make_list_short_names_devices()
+    list_short_name_devices = make_list_short_name_devices()
     id_user = str(message.from_user.id)
-    user_info_open = load_json('user_info.json')
+    user_info_open = json.load(open('user_info.json', 'r'))
     if not user_info_open[id_user]['device_to_choose']:
-        user_info_open[id_user]['device_to_choose'] = list_devices
+        user_info_open[id_user]['device_to_choose'] = list_short_name_devices
         upload_json('user_info.json', user_info_open)
     markup = types.ReplyKeyboardMarkup(row_width=1)
     markup.add(*list(map(lambda x: types.KeyboardButton(x), user_info_open[id_user]['device_to_choose'])))
     bot.send_message(message.chat.id, "Выберите прибор", reply_markup=markup)
 
 
-@bot.message_handler(func=lambda
-        message: message.text == "Просмотр приборов по комплексам")
-def all_complexes(message):
-    list_complexes = make_list_complexes()
-    markup = types.ReplyKeyboardMarkup(row_width=1)
-    markup.add(*list(map(lambda x: types.KeyboardButton(x), list_complexes)))
-    bot.send_message(message.chat.id, "Выберите комплекс", reply_markup=markup)
-
-
-@bot.message_handler(func=lambda
-        message: message.text in make_list_complexes())
-def choose_one_complex(message):
-    id_user = str(message.from_user.id)
-    conn = sqlite3.connect('database.db')
-    cursor = conn.cursor()
-    complex_id = cursor.execute(f"SELECT id FROM complexes WHERE name = {message.text}").fetchone()
-    list_devices_full_name = list(map(lambda x: disk.get_public_meta(x[0]),
-                                      cursor.execute(f"SELECT link FROM devices WHERE complex_id = {complex_id}")))
-    list_devices_short_name =
-    cursor.execute(f"SELECT link FROM devices WHERE complex_id = {complex_id}")
-    user_info_open = load_json('user_info.json')
-    user_info_open[id_user]['device_to_choose'] = list(map(lambda x: x[0], list(cursor.fetchall())))
-    upload_json('user_info.json', user_info_open)
-    all_devices(message)
-
-
-@bot.message_handler(func=lambda
-        message: message.text in list_devices)
+@bot.message_handler(func=lambda message: message.text in make_list_short_name_devices())
 def choose_device(message):
-    ID_user = str(message.from_user.id)
-    user_info_open = load_json('user_info.json')
-    user_info_open[ID_user]['device'] = message.text
+    id_user = str(message.from_user.id)
+    user_info_open = json.load(open('user_info.json', 'r'))
+    user_info_open[id_user]['device'] = short_name_to_full_name_device(message.text)
     upload_json('user_info.json', user_info_open)
-    work_with_latest_file(ID_user)
-    work_with_first_file(ID_user)
     choose_time_delay(message)
-
-
-def work_with_latest_file(user_id):
-    user_info_open = load_json('user_info.json')
-    device = user_info_open[user_id]['device']
-    last_record_file = f"{main_path}/{device}/{max(list(filter(lambda x: '.csv' in x, os.listdir(f'{main_path}/{device}'))))}"
-    file_name = pd.read_csv(preprocessing_one_file(last_record_file))
-    max_date = str(pd.to_datetime(file_name[load_json('config_devices.json')[device]['time_cols']]).max()).split()[0]
-    devices_tech_info_open = load_json('devices_tech_info.json')
-    devices_tech_info_open[device] = {'last_record_file': last_record_file}
-    user_info_open[user_id]['last_record_date'] = max_date
-    upload_json('user_info.json', user_info_open)
-    upload_json('devices_tech_info.json', devices_tech_info_open)
-
-
-def work_with_first_file(user_id):
-    device = load_json('user_info.json')[user_id]['device']
-    first_record_file = min(list(filter(lambda x: '.csv' in x, os.listdir(f'proc_data/{device}'))))
-    df = pd.read_csv(f"proc_data/{device}/{first_record_file}")
-    time_col = load_json('config_devices.json')[device]['time_cols']
-    devices_tech_info_open = load_json('devices_tech_info.json')
-    devices_tech_info_open[device]['first_record_date'] = str(df[time_col].min()).split()[0]
-    upload_json('devices_tech_info.json', devices_tech_info_open)
 
 
 def choose_time_delay(message):
@@ -189,79 +137,16 @@ def choose_time_delay(message):
 
 @bot.message_handler(func=lambda message: message.text in ['2 дня', '7 дней', '14 дней', '31 день'])
 def choose_default_time_delay(message):
-    ID_user = str(message.from_user.id)
+    id_user = str(message.from_user.id)
     delay = 2 if message.text == '2 дня' else 7 if message.text == '7 дней' else 14 if message.text == '14 дней' else 31
-    user_info_open = load_json('user_info.json')
-    end_record_date = user_info_open[ID_user]['last_record_date']
-    begin_record_date = (datetime.strptime(end_record_date, '%Y-%m-%d') - timedelta(days=delay)).strftime('%Y-%m-%d')
-    user_info_open[ID_user]['begin_record_date'] = str(begin_record_date).split()[0]
+    user_info_open = json.load(open('user_info.json', 'r'))
+    device = user_info_open[id_user]['device']
+    file_name = max(os.listdir(f"../MSU_aerosol_site/msu_aerosol/proc_data/{device}"))
+    end_record_date = pd.to_datetime(pd.read_csv(f"proc_data/{device}/{file_name}")[get_time_col(device)].iloc[-1])
+    user_info_open[id_user]['begin_record_date'] = str(end_record_date - timedelta(days=delay))
+    user_info_open[id_user]['end_record_date'] = str(end_record_date)
     upload_json('user_info.json', user_info_open)
     choose_columns(message)
-
-
-@bot.message_handler(func=lambda message: message.text == 'Свой временной промежуток')
-def choose_not_default_delay(message):
-    choose_not_default_start_date(message)
-
-
-def choose_not_default_start_date(message):
-    ID_user = str(message.from_user.id)
-    devices_tech_info_open = load_json('devices_tech_info.json')
-    user_info_open = load_json('user_info.json')[ID_user]
-    device = user_info_open['device']
-    first_record_date = devices_tech_info_open[device]['first_record_date']
-    first_record_date = datetime.strptime(first_record_date, "%Y-%m-%d").strftime("%d.%m.%Y")
-    last_record_date = user_info_open['last_record_date']
-    last_record_date = datetime.strptime(last_record_date, "%Y-%m-%d").strftime("%d.%m.%Y")
-    bot.send_message(message.chat.id, f"Данные досупны с {first_record_date} по {last_record_date}")
-    msg = bot.send_message(message.chat.id, "Дата начала отрезка данных (в формате 'день.месяц.год')",
-                           reply_markup=types.ReplyKeyboardRemove())
-    bot.register_next_step_handler(msg, begin_record_date_choose)
-
-
-def begin_record_date_choose(message):
-    ID_user = str(message.from_user.id)
-    devices_tech_info_open = load_json('devices_tech_info.json')
-    user_info_open = load_json('user_info.json')
-    device = user_info_open[ID_user]['device']
-    first_record_date = devices_tech_info_open[device]['first_record_date']
-    first_record_date = datetime.strptime(first_record_date, "%Y-%m-%d").date()
-    last_record_date = user_info_open[ID_user]['last_record_date']
-    last_record_date = datetime.strptime(last_record_date, "%Y-%m-%d").date()
-    try:
-        begin_record_date = datetime.strptime(message.text, "%d.%m.%Y").date()
-        if not last_record_date >= begin_record_date >= first_record_date:
-            raise ValueError
-        user_info_open[ID_user]['begin_record_date'] = str(begin_record_date).split()[0]
-        upload_json('user_info.json', user_info_open)
-        choose_not_default_finish_date(message)
-    except ValueError:
-        bot.send_message(message.chat.id, "Введена некорректная дата")
-        choose_not_default_start_date(message)
-
-
-def choose_not_default_finish_date(message):
-    msg = bot.send_message(message.chat.id, "Дата конца отрезка данных (в формате 'день.месяц.год')")
-    bot.register_next_step_handler(msg, end_record_date_choose)
-
-
-def end_record_date_choose(message):
-    ID_user = str(message.from_user.id)
-    user_info_open = load_json('user_info.json')
-    begin_record_date = user_info_open[ID_user]['begin_record_date']
-    begin_record_date = datetime.strptime(begin_record_date, "%Y-%m-%d").date()
-    last_record_date = user_info_open[ID_user]['last_record_date']
-    last_record_date = datetime.strptime(last_record_date, "%Y-%m-%d").date()
-    try:
-        end_record_date = datetime.strptime(message.text, "%d.%m.%Y").date()
-        if not (last_record_date >= end_record_date >= begin_record_date):
-            raise ValueError
-        user_info_open[ID_user]['last_record_date'] = str(end_record_date).split()[0]
-        upload_json('user_info.json', user_info_open)
-        choose_columns(message)
-    except ValueError:
-        bot.send_message(message.chat.id, "Введена некорректная дата")
-        choose_not_default_finish_date(message)
 
 
 def draw_inline_keyboard(selected_columns, ava_col):
@@ -275,79 +160,76 @@ def draw_inline_keyboard(selected_columns, ava_col):
 
 @bot.callback_query_handler(func=lambda call: True)
 def choose_columns(call):
-    ID_user = str(call.from_user.id)
+    id_user = str(call.from_user.id)
+    user_info_open = json.load(open('user_info.json', 'r'))
+    ava_col = make_list_cols(user_info_open[str(call.from_user.id)]['device'])
     if isinstance(call, CallbackQuery):
         text = call.data
     else:
         text = call.text
     if text.startswith('feature'):
         feature = "_".join(call.data.split('feature')[1].split("_")[1::])
-        user_info_open = load_json('user_info.json')
-        selected_features = user_info_open[ID_user]['selected_columns']
+        selected_features = user_info_open[id_user]['selected_columns']
         if feature in selected_features:
             selected_features.remove(feature)
             bot.answer_callback_query(call.id, 'Вы убрали столбец ' + feature)
         else:
             selected_features.append(feature)
             bot.answer_callback_query(call.id, 'Вы добавили столбец ' + feature)
-        user_info_open[ID_user]['selected_columns'] = selected_features
+        user_info_open[id_user]['selected_columns'] = selected_features
         upload_json('user_info.json', user_info_open)
         bot.answer_callback_query(call.id, 'Вы выбрали Фичу ' + feature)
         selected_columns = user_info_open[str(call.from_user.id)]['selected_columns']
-        ava_col = load_json('config_devices.json')[user_info_open[ID_user]['device']]['cols']
         bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text="Нажми",
                               reply_markup=draw_inline_keyboard(selected_columns, ava_col))
 
     elif text == 'next':
-        if len(load_json('user_info.json')[ID_user]['selected_columns']) != 0:
+        if len(json.load(open('user_info.json', 'r'))[id_user]['selected_columns']) != 0:
             concat_files(call)
         else:
             bot.answer_callback_query(call.id, 'Ни один параметр не выбран!')
     else:
-        user_info_open = load_json('user_info.json')
-        ava_col = config_devices_open[user_info_open[ID_user]['device']]['cols']
-        if 'selected_columns' not in user_info_open[ID_user].keys():
-            user_info_open[ID_user]['selected_columns'] = []
+        user_info_open = json.load(open('user_info.json', 'r'))
+        if 'selected_columns' not in user_info_open[id_user].keys():
+            user_info_open[id_user]['selected_columns'] = []
         upload_json('user_info.json', user_info_open)
-        selected_columns = user_info_open[ID_user]['selected_columns']
+        selected_columns = user_info_open[id_user]['selected_columns']
         bot.send_message(call.chat.id, 'Столбцы для выбора:',
                          reply_markup=draw_inline_keyboard(selected_columns, ava_col))
 
 
 def concat_files(message):
-    ID_user = str(message.from_user.id)
+    id_user = str(message.from_user.id)
     if isinstance(message, CallbackQuery):
         text = message.data
     else:
         text = message.text
 
-    user_info_open = load_json('user_info.json')
-    if user_info_open[ID_user]['update_quick_access']:
-        user_info_open[ID_user]['quick_access'] = user_info_open[ID_user].copy()
-        user_info_open[ID_user]['update_quick_access'] = False
+    user_info_open = json.load(open('user_info.json', 'r'))
+    if user_info_open[id_user]['update_quick_access']:
+        user_info_open[id_user]['quick_access'] = user_info_open[id_user].copy()
+        user_info_open[id_user]['update_quick_access'] = False
         upload_json('user_info.json', user_info_open)
-        bot.send_message(ID_user, 'Параметры для быстрого доступа выбраны. ')
+        bot.send_message(id_user, 'Параметры для быстрого доступа выбраны. ')
     if text == 'Отрисовка графика':
-        user_info_open = load_json('user_info.json')
-        user_id = user_info_open[ID_user]['quick_access']
+        user_info_open = json.load(open('user_info.json', 'r'))
+        user_id = user_info_open[id_user]['quick_access']
     else:
-        user_info_open = load_json('user_info.json')
-        user_id = user_info_open[ID_user]
+        user_info_open = json.load(open('user_info.json', 'r'))
+        user_id = user_info_open[id_user]
     device = user_id['device']
-    begin_record_date = datetime.strptime(user_id['begin_record_date'], '%Y-%m-%d')
-    end_record_date = datetime.strptime(user_id['last_record_date'], '%Y-%m-%d')
+    begin_record_date = pd.to_datetime(user_id['begin_record_date'])
+    end_record_date = pd.to_datetime(user_id['end_record_date'])
     current_date, combined_data = begin_record_date, pd.DataFrame()
     while current_date <= end_record_date + timedelta(days=100):
         try:
-            data = pd.read_csv(f"proc_data/{device}/{current_date.strftime('%Y_%m')}.csv")
+            data = pd.read_csv(
+                f"../MSU_aerosol_site/msu_aerosol/proc_data/{device}/{current_date.strftime('%Y_%m')}.csv")
             combined_data = pd.concat([combined_data, data], ignore_index=True)
             current_date += timedelta(days=29)
         except FileNotFoundError:
             current_date += timedelta(days=29)
-    begin_record_date = pd.to_datetime(begin_record_date)
-    end_record_date = pd.to_datetime(end_record_date)
-    device_dict = load_json('config_devices.json')[device]
-    time_col = device_dict['time_cols']
+    time_col = get_time_col(device)
     combined_data[time_col] = pd.to_datetime(combined_data[time_col], format="%Y-%m-%d %H:%M:%S")
     combined_data = combined_data[
         (combined_data[time_col] >= begin_record_date) & (
@@ -383,10 +265,111 @@ def concat_files(message):
                                  mode='lines',
                                  name=col,
                                  line=go.scatter.Line(
-                                     color=device_dict['color_dict'][col])))
-    fig.write_image(f"graphs_photo/{ID_user}.png")
-    bot.send_photo(ID_user, photo=open(f"graphs_photo/{ID_user}.png", 'rb'))
+                                     color=get_color(col))))
+    fig.write_image(f"graphs_photo/{id_user}.png")
+    bot.send_photo(id_user, photo=open(f"graphs_photo/{id_user}.png", 'rb'))
     plt.close()
+
+
+@bot.message_handler(func=lambda message: message.text == 'Свой временной промежуток')
+def choose_not_default_delay(message):
+    choose_not_default_start_date(message)
+
+
+def choose_not_default_start_date(message):
+    ID_user = str(message.from_user.id)
+    user_info_open = json.load(open('user_info.json', 'r'))[ID_user]
+    device = user_info_open['device']
+    first_record_date, last_record_date = make_range(device)
+    first_record_date = first_record_date.strftime("%d.%m.%Y")
+    last_record_date = last_record_date.strftime("%d.%m.%Y")
+    bot.send_message(message.chat.id, f"Данные досупны с {first_record_date} по {last_record_date}")
+    msg = bot.send_message(message.chat.id, "Дата начала отрезка данных (в формате 'день.месяц.год')",
+                           reply_markup=types.ReplyKeyboardRemove())
+    bot.register_next_step_handler(msg, begin_record_date_choose)
+
+
+def begin_record_date_choose(message):
+    id_user = str(message.from_user.id)
+    user_info_open = json.load(open('user_info.json', 'r'))
+    device = user_info_open[id_user]['device']
+    first_record_date, last_record_date = make_range(device)
+    try:
+        begin_record_date = datetime.strptime(message.text, "%d.%m.%Y").date()
+        if not last_record_date.date() >= begin_record_date >= first_record_date.date():
+            raise ValueError
+        user_info_open[id_user]['begin_record_date'] = str(begin_record_date)
+        upload_json('user_info.json', user_info_open)
+        choose_not_default_finish_date(message)
+    except ValueError:
+        bot.send_message(message.chat.id, "Введена некорректная дата")
+        choose_not_default_start_date(message)
+
+
+def choose_not_default_finish_date(message):
+    msg = bot.send_message(message.chat.id, "Дата конца отрезка данных (в формате 'день.месяц.год')")
+    bot.register_next_step_handler(msg, end_record_date_choose)
+
+
+def end_record_date_choose(message):
+    id_user = str(message.from_user.id)
+    user_info_open = json.load(open('user_info.json', 'r'))
+    device = user_info_open[id_user]['device']
+    first_record_date, last_record_date = make_range(device)
+    try:
+        end_record_date = datetime.strptime(message.text, "%d.%m.%Y").date()
+        if not (last_record_date.date() >= end_record_date >= first_record_date.date()):
+            raise ValueError
+        user_info_open[id_user]['end_record_date'] = str(end_record_date)
+        upload_json('user_info.json', user_info_open)
+        choose_columns(message)
+    except ValueError:
+        bot.send_message(message.chat.id, "Введена некорректная дата")
+        choose_not_default_finish_date(message)
+
+
+@bot.message_handler(func=lambda
+        message: message.text == "Просмотр приборов по комплексам")
+def all_complexes(message):
+    markup = types.ReplyKeyboardMarkup(row_width=1)
+    markup.add(*list(map(lambda x: types.KeyboardButton(x), make_list_complexes())))
+    bot.send_message(message.chat.id, "Выберите комплекс", reply_markup=markup)
+
+
+@bot.message_handler(func=lambda
+        message: message.text in make_list_complexes())
+def choose_one_complex(message):
+    id_user = str(message.from_user.id)
+    user_info_open = json.load(open('user_info.json', 'r'))
+    user_info_open[id_user]['device_to_choose'] = get_devices_from_complex(message.text)
+    upload_json('user_info.json', user_info_open)
+    all_devices(message)
+
+
+@bot.message_handler(func=lambda
+        message: message.text == "Быстрый доступ")
+def quick_access(message):
+    id_user = str(message.from_user.id)
+    markup = types.ReplyKeyboardMarkup(row_width=1)
+    markup.add('Настроить быстрый доступ')
+    if 'quick_access' in json.load(open('user_info.json', 'r'))[id_user].keys():
+        markup.add('Отрисовка графика')
+    bot.send_message(message.chat.id, "Выберите действие", reply_markup=markup)
+
+
+@bot.message_handler(func=lambda message: message.text == 'Отрисовка графика')
+def logic_draw_plot(message):
+    concat_files(message)
+
+
+@bot.message_handler(func=lambda
+        message: message.text == "Настроить быстрый доступ")
+def update_quick_access(message):
+    id_user = str(message.from_user.id)
+    d = json.load(open('user_info.json', 'r')).copy()
+    d[id_user]['update_quick_access'] = True
+    upload_json('user_info.json', d)
+    choice_devices_or_complexes(message)
 
 
 bot.polling(none_stop=True)
