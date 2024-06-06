@@ -20,43 +20,56 @@ yadisk_token = os.getenv("YADISK_TOKEN")
 disk = YaDisk(token=yadisk_token)
 
 
+def execute_query(query: str, method='fetchall'):
+    conn = sqlite3.connect(path_db)
+    cursor = conn.cursor()
+    if method == 'fetchall':
+        value = cursor.execute(query).fetchall()
+    else:
+        value = cursor.execute(query).fetchone()
+    conn.close()
+    return value
+
+
 def upload_json(path, to_save):
     with open(path, 'w') as outfile:
         json.dump(to_save, outfile)
 
 
 def make_list_short_name_devices():
-    conn = sqlite3.connect(path_db)
-    cursor = conn.cursor()
-    return list(map(lambda x: x[0], cursor.execute('SELECT name FROM devices WHERE show=TRUE').fetchall()))
+    return list(map(lambda x: x[0], execute_query('SELECT name FROM devices WHERE show=TRUE')))
 
 
 def short_name_to_full_name_device(short_name):
-    conn = sqlite3.connect(path_db)
-    cursor = conn.cursor()
-    return cursor.execute(f'SELECT full_name FROM devices WHERE name="{short_name}"').fetchone()[0]
+    return execute_query(
+        f'SELECT full_name FROM devices WHERE name="{short_name}"',
+        method='fetchone',
+    )[0]
 
 
 def get_time_col(device):
-    conn = sqlite3.connect(path_db)
-    cursor = conn.cursor()
-    device_id = cursor.execute(f'SELECT id FROM devices WHERE full_name = "{device}"').fetchone()[0]
-    return cursor.execute(f'SELECT name FROM time_column WHERE device_id = "{device_id}" AND use=1').fetchone()[0]
+    device_id = execute_query(
+        f'SELECT id FROM devices WHERE full_name = "{device}"',
+        method='fetchone',
+    )[0]
+    return execute_query(
+        f'SELECT name FROM time_column WHERE device_id = "{device_id}" AND use=1',
+        method='fetchone',
+    )[0]
 
 
 def make_list_cols(device):
-    conn = sqlite3.connect(path_db)
-    cursor = conn.cursor()
-    device_id = cursor.execute(f'SELECT id FROM devices WHERE full_name = "{device}"').fetchone()[0]
+    device_id = execute_query(f'SELECT id FROM devices WHERE full_name = "{device}"', method='fetchone')[0]
     return list(
-        map(lambda x: x[0],
-            cursor.execute(f'SELECT name FROM column WHERE device_id = "{device_id}" AND use=1').fetchall()))
+        map(
+            lambda x: x[0],
+            execute_query(f'SELECT name FROM column WHERE device_id = "{device_id}" AND use=1')
+        )
+    )
 
 
 def get_color(col):
-    conn = sqlite3.connect(path_db)
-    cursor = conn.cursor()
-    return cursor.execute(f'SELECT color FROM column WHERE name = "{col}"').fetchone()[0]
+    return execute_query(f'SELECT color FROM column WHERE name = "{col}"', method='fetchone')[0]
 
 
 def make_range(device):
@@ -69,17 +82,22 @@ def make_range(device):
 
 
 def make_list_complexes():
-    conn = sqlite3.connect(path_db)
-    cursor = conn.cursor()
-    return list(map(lambda x: x[0], cursor.execute('SELECT name FROM complexes').fetchall()))
+    return list(map(lambda x: x[0], execute_query('SELECT name FROM complexes')))
 
 
 def get_devices_from_complex(complex):
     conn = sqlite3.connect(path_db)
     cursor = conn.cursor()
-    complex_id = cursor.execute(f'SELECT id FROM complexes WHERE name = "{complex}"').fetchone()[0]
-    return list(map(lambda x: x[0],
-                    cursor.execute(f'SELECT name FROM devices WHERE show=1 AND complex_id="{complex_id}"').fetchall()))
+    complex_id = execute_query(
+        f'SELECT id FROM complexes WHERE name = "{complex}"',
+        method='fetchone',
+    )[0]
+    return list(
+        map(
+            lambda x: x[0],
+            cursor.execute(f'SELECT name FROM devices WHERE show=1 AND complex_id="{complex_id}"').fetchall()
+        )
+    )
 
 
 @bot.message_handler(commands=['start'])
