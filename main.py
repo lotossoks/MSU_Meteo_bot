@@ -1,4 +1,5 @@
 import os
+import kaleido
 from telebot import types
 import config
 import telebot
@@ -16,7 +17,7 @@ bot = telebot.TeleBot(config.token)
 path_to_site = "../MSU_aerosol_site"
 path_db = f"{path_to_site}/msu_aerosol/database.db"
 load_dotenv(f"{path_to_site}/.env")
-yadisk_token = os.getenv("YADISK_TOKEN")
+yadisk_token = os.getenv('YADISK_TOKEN', default='FAKE_TOKEN')
 disk = YaDisk(token=yadisk_token)
 
 
@@ -199,7 +200,7 @@ def choose_default_time_delay(message):
     device = user_info_open[id_user]["device"]
     file_name = max(os.listdir(f"{path_to_site}/msu_aerosol/proc_data/{device}"))
     end_record_date = pd.to_datetime(
-        pd.read_csv(f"proc_data/{device}/{file_name}")[get_time_col(device)].iloc[-1]
+        pd.read_csv(f"{path_to_site}/msu_aerosol/proc_data/{device}/{file_name}")[get_time_col(device)].iloc[-1]
     )
     user_info_open[id_user]["begin_record_date"] = str(
         end_record_date - timedelta(days=delay)
@@ -335,7 +336,8 @@ def concat_files(message):
         linewidth=1,
         linecolor="black",
         mirror=True,
-        tickformat="%d.%m.%Y",
+        tickformat='%H:%M\n%d.%m.%Y',
+        minor_griddash='dot',
     )
     fig.update_yaxes(
         gridcolor="grey",
