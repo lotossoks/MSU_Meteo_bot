@@ -135,7 +135,6 @@ def start(message):
             message.chat.id, text=f"Начните работу с приборами", reply_markup=markup
         )
     except Exception as e:
-        print(message)
         exception_handler(message, e)
 
 
