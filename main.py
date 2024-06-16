@@ -119,61 +119,74 @@ def get_devices_from_complex(complex):
 
 @bot.message_handler(commands=["start"])
 def start(message):
-    id_user = str(message.from_user.id)
-    user_info_open = json.load(open("user_info.json", "r"))
-    if id_user not in user_info_open.keys():
-        user_info_open[id_user] = {}
-    user_info_open[id_user]["update_quick_access"] = False
-    user_info_open[id_user].pop("selected_columns", None)
-    user_info_open[id_user]["device_to_choose"] = []
-    upload_json("user_info.json", user_info_open)
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add(types.KeyboardButton("Просмотр данных с приборов"))
-    markup.add(types.KeyboardButton("Быстрый доступ"))
-    bot.send_message(
-        message.chat.id, text=f"Начните работу с приборами", reply_markup=markup
-    )
+    try:
+        id_user = str(message.from_user.id)
+        user_info_open = json.load(open("user_info.json", "r"))
+        if id_user not in user_info_open.keys():
+            user_info_open[id_user] = {}
+        user_info_open[id_user]["update_quick_access"] = False
+        user_info_open[id_user].pop("selected_columns", None)
+        user_info_open[id_user]["device_to_choose"] = []
+        upload_json("user_info.json", user_info_open)
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(types.KeyboardButton("Просмотр данных с приборов"))
+        markup.add(types.KeyboardButton("Быстрый доступ"))
+        bot.send_message(
+            message.chat.id, text=f"Начните работу с приборами", reply_markup=markup
+        )
+    except Exception as e:
+        print(message)
+        exception_handler(message, e)
 
 
 @bot.message_handler(func=lambda message: message.text == "Просмотр данных с приборов")
 def choice_devices_or_complexes(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add(types.KeyboardButton("Просмотр всех приборов"))
-    markup.add(types.KeyboardButton("Просмотр приборов по комплексам"))
-    bot.send_message(
-        message.chat.id, text=f"Каким образом выбрать прибор?", reply_markup=markup
-    )
+    try:
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add(types.KeyboardButton("Просмотр всех приборов"))
+        markup.add(types.KeyboardButton("Просмотр приборов по комплексам"))
+        bot.send_message(
+            message.chat.id, text=f"Каким образом выбрать прибор?", reply_markup=markup
+        )
+    except Exception as e:
+        exception_handler(message, e)
 
 
 @bot.message_handler(func=lambda message: message.text == "Просмотр всех приборов")
 def all_devices(message):
-    list_short_name_devices = make_list_short_name_devices()
-    id_user = str(message.from_user.id)
-    user_info_open = json.load(open("user_info.json", "r"))
-    if not user_info_open[id_user]["device_to_choose"]:
-        user_info_open[id_user]["device_to_choose"] = list_short_name_devices
-        upload_json("user_info.json", user_info_open)
-    markup = types.ReplyKeyboardMarkup(row_width=1)
-    markup.add(
-        *list(
-            map(
-                lambda x: types.KeyboardButton(x),
-                user_info_open[id_user]["device_to_choose"],
+    try:
+        list_short_name_devices = make_list_short_name_devices()
+        id_user = str(message.from_user.id)
+        user_info_open = json.load(open("user_info.json", "r"))
+        if not user_info_open[id_user]["device_to_choose"]:
+            user_info_open[id_user]["device_to_choose"] = list_short_name_devices
+            upload_json("user_info.json", user_info_open)
+        markup = types.ReplyKeyboardMarkup(row_width=1)
+        markup.add(
+            *list(
+                map(
+                    lambda x: types.KeyboardButton(x),
+                    user_info_open[id_user]["device_to_choose"],
+                )
             )
         )
-    )
-    bot.send_message(message.chat.id, "Выберите прибор", reply_markup=markup)
+        bot.send_message(message.chat.id, "Выберите прибор", reply_markup=markup)
+    except Exception as e:
+        exception_handler(message, e)
 
 
 @bot.message_handler(
     func=lambda message: message.text in make_list_short_name_devices()
 )
 def choose_device(message):
-    id_user = str(message.from_user.id)
-    user_info_open = json.load(open("user_info.json", "r"))
-    user_info_open[id_user]["device"] = short_name_to_full_name_device(message.text)
-    upload_json("user_info.json", user_info_open)
-    choose_time_delay(message)
+    try:
+        id_user = str(message.from_user.id)
+        user_info_open = json.load(open("user_info.json", "r"))
+        user_info_open[id_user]["device"] = short_name_to_full_name_device(message.text)
+        upload_json("user_info.json", user_info_open)
+        choose_time_delay(message)
+    except Exception as e:
+        exception_handler(message, e)
 
 
 def choose_time_delay(message):
@@ -189,25 +202,28 @@ def choose_time_delay(message):
 @bot.message_handler(
     func=lambda message: message.text in ["2 дня", "7 дней", "14 дней", "31 день"]
 )
-def choose_default_time_delay(message):
-    id_user = str(message.from_user.id)
-    delay = (
-        2
-        if message.text == "2 дня"
-        else 7 if message.text == "7 дней" else 14 if message.text == "14 дней" else 31
-    )
-    user_info_open = json.load(open("user_info.json", "r"))
-    device = user_info_open[id_user]["device"]
-    file_name = max(os.listdir(f"{path_to_site}/msu_aerosol/proc_data/{device}"))
-    end_record_date = pd.to_datetime(
-        pd.read_csv(f"{path_to_site}/msu_aerosol/proc_data/{device}/{file_name}")[get_time_col(device)].iloc[-1]
-    )
-    user_info_open[id_user]["begin_record_date"] = str(
-        end_record_date - timedelta(days=delay)
-    )
-    user_info_open[id_user]["end_record_date"] = str(end_record_date)
-    upload_json("user_info.json", user_info_open)
-    choose_columns(message)
+def delay(message):
+    try:
+        id_user = str(message.from_user.id)
+        delay = (
+            2
+            if message.text == "2 дня"
+            else 7 if message.text == "7 дней" else 14 if message.text == "14 дней" else 31
+        )
+        user_info_open = json.load(open("user_info.json", "r"))
+        device = user_info_open[id_user]["device"]
+        file_name = max(os.listdir(f"{path_to_site}/msu_aerosol/proc_data/{device}"))
+        end_record_date = pd.to_datetime(
+            pd.read_csv(f"{path_to_site}/msu_aerosol/proc_data/{device}/{file_name}")[get_time_col(device)].iloc[-1]
+        )
+        user_info_open[id_user]["begin_record_date"] = str(
+            end_record_date - timedelta(days=delay)
+        )
+        user_info_open[id_user]["end_record_date"] = str(end_record_date)
+        upload_json("user_info.json", user_info_open)
+        choose_columns(message)
+    except Exception as e:
+        exception_handler(message, e)
 
 
 def draw_inline_keyboard(selected_columns, ava_col):
@@ -226,52 +242,55 @@ def draw_inline_keyboard(selected_columns, ava_col):
 
 @bot.callback_query_handler(func=lambda call: True)
 def choose_columns(call):
-    id_user = str(call.from_user.id)
-    user_info_open = json.load(open("user_info.json", "r"))
-    ava_col = make_list_cols(user_info_open[str(call.from_user.id)]["device"])
-    if isinstance(call, CallbackQuery):
-        text = call.data
-    else:
-        text = call.text
-    if text.startswith("feature"):
-        feature = "_".join(call.data.split("feature")[1].split("_")[1::])
-        selected_features = user_info_open[id_user]["selected_columns"]
-        if feature in selected_features:
-            selected_features.remove(feature)
-            bot.answer_callback_query(call.id, "Вы убрали столбец " + feature)
-        else:
-            selected_features.append(feature)
-            bot.answer_callback_query(call.id, "Вы добавили столбец " + feature)
-        user_info_open[id_user]["selected_columns"] = selected_features
-        upload_json("user_info.json", user_info_open)
-        bot.answer_callback_query(call.id, "Вы выбрали Фичу " + feature)
-        selected_columns = user_info_open[str(call.from_user.id)]["selected_columns"]
-        bot.edit_message_text(
-            chat_id=call.message.chat.id,
-            message_id=call.message.message_id,
-            text="Нажми",
-            reply_markup=draw_inline_keyboard(selected_columns, ava_col),
-        )
-
-    elif text == "next":
-        if (
-            len(json.load(open("user_info.json", "r"))[id_user]["selected_columns"])
-            != 0
-        ):
-            concat_files(call)
-        else:
-            bot.answer_callback_query(call.id, "Ни один параметр не выбран!")
-    else:
+    try:
+        id_user = str(call.from_user.id)
         user_info_open = json.load(open("user_info.json", "r"))
-        if "selected_columns" not in user_info_open[id_user].keys():
-            user_info_open[id_user]["selected_columns"] = []
-        upload_json("user_info.json", user_info_open)
-        selected_columns = user_info_open[id_user]["selected_columns"]
-        bot.send_message(
-            call.chat.id,
-            "Столбцы для выбора:",
-            reply_markup=draw_inline_keyboard(selected_columns, ava_col),
-        )
+        ava_col = make_list_cols(user_info_open[str(call.from_user.id)]["device"])
+        if isinstance(call, CallbackQuery):
+            text = call.data
+        else:
+            text = call.text
+        if text.startswith("feature"):
+            feature = "_".join(call.data.split("feature")[1].split("_")[1::])
+            selected_features = user_info_open[id_user]["selected_columns"]
+            if feature in selected_features:
+                selected_features.remove(feature)
+                bot.answer_callback_query(call.id, "Вы убрали столбец " + feature)
+            else:
+                selected_features.append(feature)
+                bot.answer_callback_query(call.id, "Вы добавили столбец " + feature)
+            user_info_open[id_user]["selected_columns"] = selected_features
+            upload_json("user_info.json", user_info_open)
+            bot.answer_callback_query(call.id, "Вы выбрали Фичу " + feature)
+            selected_columns = user_info_open[str(call.from_user.id)]["selected_columns"]
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text="Нажми",
+                reply_markup=draw_inline_keyboard(selected_columns, ava_col),
+            )
+
+        elif text == "next":
+            if (
+                    len(json.load(open("user_info.json", "r"))[id_user]["selected_columns"])
+                    != 0
+            ):
+                concat_files(call)
+            else:
+                bot.answer_callback_query(call.id, "Ни один параметр не выбран!")
+        else:
+            user_info_open = json.load(open("user_info.json", "r"))
+            if "selected_columns" not in user_info_open[id_user].keys():
+                user_info_open[id_user]["selected_columns"] = []
+            upload_json("user_info.json", user_info_open)
+            selected_columns = user_info_open[id_user]["selected_columns"]
+            bot.send_message(
+                call.chat.id,
+                "Столбцы для выбора:",
+                reply_markup=draw_inline_keyboard(selected_columns, ava_col),
+            )
+    except Exception as e:
+        exception_handler(str(call.from_user.id), e)
 
 
 def concat_files(message):
@@ -314,7 +333,7 @@ def concat_files(message):
     combined_data = combined_data[
         (combined_data[time_col] >= begin_record_date)
         & (combined_data[time_col] <= end_record_date + timedelta(days=1))
-    ]
+        ]
     combined_data.set_index(time_col, inplace=True)
     combined_data = combined_data.replace(",", ".", regex=True).astype(float)
     if (end_record_date - begin_record_date).days > 2 and len(combined_data) >= 500:
@@ -363,7 +382,10 @@ def concat_files(message):
 
 @bot.message_handler(func=lambda message: message.text == "Свой временной промежуток")
 def choose_not_default_delay(message):
-    choose_not_default_start_date(message)
+    try:
+        choose_not_default_start_date(message)
+    except Exception as e:
+        exception_handler(message, e)
 
 
 def choose_not_default_start_date(message):
@@ -430,42 +452,63 @@ def end_record_date_choose(message):
     func=lambda message: message.text == "Просмотр приборов по комплексам"
 )
 def all_complexes(message):
-    markup = types.ReplyKeyboardMarkup(row_width=1)
-    markup.add(*list(map(lambda x: types.KeyboardButton(x), make_list_complexes())))
-    bot.send_message(message.chat.id, "Выберите комплекс", reply_markup=markup)
+    try:
+        markup = types.ReplyKeyboardMarkup(row_width=1)
+        markup.add(*list(map(lambda x: types.KeyboardButton(x), make_list_complexes())))
+        bot.send_message(message.chat.id, "Выберите комплекс", reply_markup=markup)
+    except Exception as e:
+        exception_handler(message, e)
 
 
 @bot.message_handler(func=lambda message: message.text in make_list_complexes())
 def choose_one_complex(message):
-    id_user = str(message.from_user.id)
-    user_info_open = json.load(open("user_info.json", "r"))
-    user_info_open[id_user]["device_to_choose"] = get_devices_from_complex(message.text)
-    upload_json("user_info.json", user_info_open)
-    all_devices(message)
+    try:
+        id_user = str(message.from_user.id)
+        user_info_open = json.load(open("user_info.json", "r"))
+        user_info_open[id_user]["device_to_choose"] = get_devices_from_complex(message.text)
+        upload_json("user_info.json", user_info_open)
+        all_devices(message)
+    except Exception as e:
+        exception_handler(message, e)
 
 
 @bot.message_handler(func=lambda message: message.text == "Быстрый доступ")
 def quick_access(message):
-    id_user = str(message.from_user.id)
-    markup = types.ReplyKeyboardMarkup(row_width=1)
-    markup.add("Настроить быстрый доступ")
-    if "quick_access" in json.load(open("user_info.json", "r"))[id_user].keys():
-        markup.add("Отрисовка графика")
-    bot.send_message(message.chat.id, "Выберите действие", reply_markup=markup)
+    try:
+        id_user = str(message.from_user.id)
+        markup = types.ReplyKeyboardMarkup(row_width=1)
+        markup.add("Настроить быстрый доступ")
+        if "quick_access" in json.load(open("user_info.json", "r"))[id_user].keys():
+            markup.add("Отрисовка графика")
+        bot.send_message(message.chat.id, "Выберите действие", reply_markup=markup)
+    except Exception as e:
+        exception_handler(message, e)
 
 
 @bot.message_handler(func=lambda message: message.text == "Отрисовка графика")
 def logic_draw_plot(message):
-    concat_files(message)
+    try:
+        concat_files(message)
+    except Exception as e:
+        exception_handler(message, e)
 
 
 @bot.message_handler(func=lambda message: message.text == "Настроить быстрый доступ")
 def update_quick_access(message):
-    id_user = str(message.from_user.id)
-    d = json.load(open("user_info.json", "r")).copy()
-    d[id_user]["update_quick_access"] = True
-    upload_json("user_info.json", d)
-    choice_devices_or_complexes(message)
+    try:
+        id_user = str(message.from_user.id)
+        d = json.load(open("user_info.json", "r")).copy()
+        d[id_user]["update_quick_access"] = True
+        upload_json("user_info.json", d)
+        choice_devices_or_complexes(message)
+    except Exception as e:
+        exception_handler(message, e)
+
+
+def exception_handler(message, e):
+    # print(str(e.__class__.__name__))
+    bot.send_message(message.from_user.id, "Непредвиденная ошибка")
+    start(message)
 
 
 bot.polling(none_stop=True)
