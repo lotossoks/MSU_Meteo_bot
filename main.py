@@ -1,5 +1,4 @@
 import os
-import kaleido
 from telebot import types
 import config
 import telebot
@@ -12,6 +11,7 @@ from datetime import timedelta, datetime
 from telebot.types import CallbackQuery
 import plotly.graph_objects as go
 from matplotlib import pyplot as plt
+import logging
 
 bot = telebot.TeleBot(config.token)
 path_to_site = "../MSU_aerosol_site"
@@ -19,6 +19,7 @@ path_db = f"{path_to_site}/msu_aerosol/database.db"
 load_dotenv(f"{path_to_site}/.env")
 yadisk_token = os.getenv('YADISK_TOKEN', default='FAKE_TOKEN')
 disk = YaDisk(token=yadisk_token)
+logging.basicConfig(filename='info.log')
 
 
 def execute_query(query: str, method="fetchall"):
@@ -100,11 +101,11 @@ def make_list_complexes():
     return list(map(lambda x: x[0], execute_query("SELECT name FROM complexes")))
 
 
-def get_devices_from_complex(complex):
+def get_devices_from_complex(complex_name):
     conn = sqlite3.connect(path_db)
     cursor = conn.cursor()
     complex_id = execute_query(
-        f'SELECT id FROM complexes WHERE name = "{complex}"',
+        f'SELECT id FROM complexes WHERE name = "{complex_name}"',
         method="fetchone",
     )[0]
     return list(
@@ -121,7 +122,8 @@ def get_devices_from_complex(complex):
 def start(message):
     try:
         id_user = str(message.from_user.id)
-        user_info_open = json.load(open("user_info.json", "r"))
+        with open("user_info.json", "r") as file:
+            user_info_open = json.load(file)
         if id_user not in user_info_open.keys():
             user_info_open[id_user] = {}
         user_info_open[id_user]["update_quick_access"] = False
@@ -156,7 +158,8 @@ def all_devices(message):
     try:
         list_short_name_devices = make_list_short_name_devices()
         id_user = str(message.from_user.id)
-        user_info_open = json.load(open("user_info.json", "r"))
+        with open("user_info.json", "r") as file:
+            user_info_open = json.load(file)
         if not user_info_open[id_user]["device_to_choose"]:
             user_info_open[id_user]["device_to_choose"] = list_short_name_devices
             upload_json("user_info.json", user_info_open)
@@ -180,7 +183,8 @@ def all_devices(message):
 def choose_device(message):
     try:
         id_user = str(message.from_user.id)
-        user_info_open = json.load(open("user_info.json", "r"))
+        with open("user_info.json", "r") as file:
+            user_info_open = json.load(file)
         user_info_open[id_user]["device"] = short_name_to_full_name_device(message.text)
         upload_json("user_info.json", user_info_open)
         choose_time_delay(message)
@@ -201,7 +205,7 @@ def choose_time_delay(message):
 @bot.message_handler(
     func=lambda message: message.text in ["2 дня", "7 дней", "14 дней", "31 день"]
 )
-def delay(message):
+def get_delay(message):
     try:
         id_user = str(message.from_user.id)
         delay = (
@@ -209,7 +213,8 @@ def delay(message):
             if message.text == "2 дня"
             else 7 if message.text == "7 дней" else 14 if message.text == "14 дней" else 31
         )
-        user_info_open = json.load(open("user_info.json", "r"))
+        with open("user_info.json", "r") as file:
+            user_info_open = json.load(file)
         device = user_info_open[id_user]["device"]
         file_name = max(os.listdir(f"{path_to_site}/msu_aerosol/proc_data/{device}"))
         end_record_date = pd.to_datetime(
@@ -243,7 +248,8 @@ def draw_inline_keyboard(selected_columns, ava_col):
 def choose_columns(call):
     try:
         id_user = str(call.from_user.id)
-        user_info_open = json.load(open("user_info.json", "r"))
+        with open("user_info.json", "r") as file:
+            user_info_open = json.load(file)
         ava_col = make_list_cols(user_info_open[str(call.from_user.id)]["device"])
         if isinstance(call, CallbackQuery):
             text = call.data
@@ -278,7 +284,8 @@ def choose_columns(call):
             else:
                 bot.answer_callback_query(call.id, "Ни один параметр не выбран!")
         else:
-            user_info_open = json.load(open("user_info.json", "r"))
+            with open("user_info.json", "r") as file:
+                user_info_open = json.load(file)
             if "selected_columns" not in user_info_open[id_user].keys():
                 user_info_open[id_user]["selected_columns"] = []
             upload_json("user_info.json", user_info_open)
@@ -299,17 +306,20 @@ def concat_files(message):
     else:
         text = message.text
 
-    user_info_open = json.load(open("user_info.json", "r"))
+    with open("user_info.json", "r") as file:
+        user_info_open = json.load(file)
     if user_info_open[id_user]["update_quick_access"]:
         user_info_open[id_user]["quick_access"] = user_info_open[id_user].copy()
         user_info_open[id_user]["update_quick_access"] = False
         upload_json("user_info.json", user_info_open)
         bot.send_message(id_user, "Параметры для быстрого доступа выбраны. ")
     if text == "Отрисовка графика":
-        user_info_open = json.load(open("user_info.json", "r"))
+        with open("user_info.json", "r") as file:
+            user_info_open = json.load(file)
         user_id = user_info_open[id_user]["quick_access"]
     else:
-        user_info_open = json.load(open("user_info.json", "r"))
+        with open("user_info.json", "r") as file:
+            user_info_open = json.load(file)
         user_id = user_info_open[id_user]
     device = user_id["device"]
     begin_record_date = pd.to_datetime(user_id["begin_record_date"])
@@ -388,8 +398,10 @@ def choose_not_default_delay(message):
 
 
 def choose_not_default_start_date(message):
-    ID_user = str(message.from_user.id)
-    user_info_open = json.load(open("user_info.json", "r"))[ID_user]
+    id_user = str(message.from_user.id)
+    with open("user_info.json", "r") as file:
+        user_info_open = json.load(file)
+    user_info_open = user_info_open[id_user]
     device = user_info_open["device"]
     first_record_date, last_record_date = make_range(device)
     first_record_date = first_record_date.strftime("%d.%m.%Y")
@@ -407,7 +419,8 @@ def choose_not_default_start_date(message):
 
 def begin_record_date_choose(message):
     id_user = str(message.from_user.id)
-    user_info_open = json.load(open("user_info.json", "r"))
+    with open("user_info.json", "r") as file:
+        user_info_open = json.load(file)
     device = user_info_open[id_user]["device"]
     first_record_date, last_record_date = make_range(device)
     try:
@@ -432,7 +445,8 @@ def choose_not_default_finish_date(message):
 
 def end_record_date_choose(message):
     id_user = str(message.from_user.id)
-    user_info_open = json.load(open("user_info.json", "r"))
+    with open("user_info.json", "r") as file:
+        user_info_open = json.load(file)
     device = user_info_open[id_user]["device"]
     first_record_date, last_record_date = make_range(device)
     try:
@@ -463,7 +477,8 @@ def all_complexes(message):
 def choose_one_complex(message):
     try:
         id_user = str(message.from_user.id)
-        user_info_open = json.load(open("user_info.json", "r"))
+        with open("user_info.json", "r") as file:
+            user_info_open = json.load(file)
         user_info_open[id_user]["device_to_choose"] = get_devices_from_complex(message.text)
         upload_json("user_info.json", user_info_open)
         all_devices(message)
@@ -477,7 +492,9 @@ def quick_access(message):
         id_user = str(message.from_user.id)
         markup = types.ReplyKeyboardMarkup(row_width=1)
         markup.add("Настроить быстрый доступ")
-        if "quick_access" in json.load(open("user_info.json", "r"))[id_user].keys():
+        with open("user_info.json", "r") as file:
+            user_info_open = json.load(file)
+        if "quick_access" in json.load(user_info_open)[id_user].keys():
             markup.add("Отрисовка графика")
         bot.send_message(message.chat.id, "Выберите действие", reply_markup=markup)
     except Exception as e:
@@ -505,7 +522,7 @@ def update_quick_access(message):
 
 
 def exception_handler(message, e):
-    # print(str(e.__class__.__name__))
+    logging.warning(f'Непредвиденная ошибка: {e.__class__.__name__}')
     bot.send_message(message.from_user.id, "Непредвиденная ошибка")
     start(message)
 
