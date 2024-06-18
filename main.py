@@ -12,6 +12,7 @@ from telebot.types import CallbackQuery
 import plotly.graph_objects as go
 from matplotlib import pyplot as plt
 import logging
+from datetime import datetime
 
 bot = telebot.TeleBot(config.token)
 path_to_site = "../MSU_aerosol_site"
@@ -384,6 +385,7 @@ def concat_files(message):
                 line=go.scatter.Line(color=get_color(col)),
             )
         )
+    logging.info(f'User {user_id} requested {device} for {begin_record_date} - {end_record_date} at {datetime.now()}')
     fig.write_image(f"graphs_photo/{id_user}.png")
     bot.send_photo(id_user, photo=open(f"graphs_photo/{id_user}.png", "rb"))
     plt.close()
