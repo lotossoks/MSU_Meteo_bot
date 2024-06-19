@@ -1,4 +1,5 @@
 import os
+import kaleido
 from telebot import types
 import config
 import telebot
@@ -13,6 +14,7 @@ import plotly.graph_objects as go
 from matplotlib import pyplot as plt
 import logging
 from datetime import datetime
+import plotly.express as px
 
 bot = telebot.TeleBot(config.token)
 path_to_site = "../MSU_aerosol_site"
@@ -77,9 +79,12 @@ def make_list_cols(device):
     )
 
 
-def get_color(col):
+def get_color(col, device):
+    device_id = execute_query(
+        f'SELECT id FROM devices WHERE full_name = "{device}"', method="fetchone"
+    )[0]
     return execute_query(
-        f'SELECT color FROM column WHERE name = "{col}"', method="fetchone"
+        f'SELECT color FROM column WHERE name = "{col}" AND device_id = "{device_id}"', method="fetchone"
     )[0]
 
 
@@ -346,45 +351,40 @@ def concat_files(message):
         ]
     combined_data.set_index(time_col, inplace=True)
     combined_data = combined_data.replace(",", ".", regex=True).astype(float)
-    if (end_record_date - begin_record_date).days > 2 and len(combined_data) >= 500:
-        combined_data = combined_data.resample("60min").mean()
     cols_to_draw = user_id["selected_columns"]
     combined_data.reset_index(inplace=True)
-    fig = go.Figure()
+    combined_data = combined_data.sort_values(by=time_col)
+    fig = px.line(
+        combined_data,
+        x=time_col,
+        y=cols_to_draw,
+        color_discrete_sequence=[get_color(i, device) for i in cols_to_draw],
+    )
+
     fig.update_layout(
         title=str(device),
         xaxis=dict(title="Time"),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        plot_bgcolor='white',
+        paper_bgcolor='white',
         showlegend=True,
     )
-    fig.update_traces(line={"width": 2})
+    fig.update_traces(line={'width': 2})
     fig.update_xaxes(
-        gridcolor="grey",
+        gridcolor='grey',
         showline=True,
         linewidth=1,
-        linecolor="black",
+        linecolor='black',
         mirror=True,
         tickformat='%H:%M\n%d.%m.%Y',
         minor_griddash='dot',
     )
     fig.update_yaxes(
-        gridcolor="grey",
+        gridcolor='grey',
         showline=True,
         linewidth=1,
-        linecolor="black",
+        linecolor='black',
         mirror=True,
     )
-    for col in cols_to_draw:
-        fig.add_trace(
-            go.Scatter(
-                x=combined_data[time_col],
-                y=combined_data[col],
-                mode="lines",
-                name=col,
-                line=go.scatter.Line(color=get_color(col)),
-            )
-        )
     logging.info(f'User {user_id} requested {device} for {begin_record_date} - {end_record_date} at {datetime.now()}')
     fig.write_image(f"graphs_photo/{id_user}.png")
     bot.send_photo(id_user, photo=open(f"graphs_photo/{id_user}.png", "rb"))
@@ -496,7 +496,7 @@ def quick_access(message):
         markup.add("Настроить быстрый доступ")
         with open("user_info.json", "r") as file:
             user_info_open = json.load(file)
-        if "quick_access" in json.load(user_info_open)[id_user].keys():
+        if "quick_access" in user_info_open[id_user].keys():
             markup.add("Отрисовка графика")
         bot.send_message(message.chat.id, "Выберите действие", reply_markup=markup)
     except Exception as e:
