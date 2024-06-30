@@ -10,10 +10,8 @@ from dotenv import load_dotenv
 import pandas as pd
 from datetime import timedelta, datetime
 from telebot.types import CallbackQuery
-import plotly.graph_objects as go
 from matplotlib import pyplot as plt
 import logging
-from datetime import datetime
 import plotly.express as px
 
 bot = telebot.TeleBot(config.token)
@@ -60,7 +58,7 @@ def get_time_col(device):
         method="fetchone",
     )[0]
     return execute_query(
-        f'SELECT name FROM time_column WHERE device_id = "{device_id}" AND use=1',
+        f'SELECT name FROM time_columns WHERE graph_id = "{device_id}" AND use=1',
         method="fetchone",
     )[0]
 
@@ -73,7 +71,7 @@ def make_list_cols(device):
         map(
             lambda x: x[0],
             execute_query(
-                f'SELECT name FROM column WHERE device_id = "{device_id}" AND use=1'
+                f'SELECT name FROM columns WHERE graph_id = "{device_id}" AND use=1'
             ),
         )
     )
@@ -84,7 +82,7 @@ def get_color(col, device):
         f'SELECT id FROM devices WHERE full_name = "{device}"', method="fetchone"
     )[0]
     return execute_query(
-        f'SELECT color FROM column WHERE name = "{col}" AND device_id = "{device_id}"', method="fetchone"
+        f'SELECT color FROM columns WHERE name = "{col}" AND graph_id = "{device_id}"', method="fetchone"
     )[0]
 
 
@@ -124,9 +122,9 @@ def get_devices_from_complex(complex_name):
     )
 
 
-@bot.message_handler(commands=["start"])
+@bot.message_handler(func=lambda message: message.text in ["/start", "Нет"])
 def start(message):
-    try:
+    # try:
         id_user = str(message.from_user.id)
         with open("user_info.json", "r") as file:
             user_info_open = json.load(file)
@@ -142,8 +140,8 @@ def start(message):
         bot.send_message(
             message.chat.id, text=f"Начните работу с приборами", reply_markup=markup
         )
-    except Exception as e:
-        exception_handler(message, e)
+    # except Exception as e:
+    #     exception_handler(message, e, 'start')
 
 
 @bot.message_handler(func=lambda message: message.text == "Просмотр данных с приборов")
@@ -156,7 +154,7 @@ def choice_devices_or_complexes(message):
             message.chat.id, text=f"Каким образом выбрать прибор?", reply_markup=markup
         )
     except Exception as e:
-        exception_handler(message, e)
+        exception_handler(message, e, 'choice_devices_or_complexes')
 
 
 @bot.message_handler(func=lambda message: message.text == "Просмотр всех приборов")
@@ -180,22 +178,23 @@ def all_devices(message):
         )
         bot.send_message(message.chat.id, "Выберите прибор", reply_markup=markup)
     except Exception as e:
-        exception_handler(message, e)
+        exception_handler(message, e, 'all_devices')
 
 
 @bot.message_handler(
-    func=lambda message: message.text in make_list_short_name_devices()
+    func=lambda message: message.text in make_list_short_name_devices() + ['Да']
 )
 def choose_device(message):
     try:
-        id_user = str(message.from_user.id)
-        with open("user_info.json", "r") as file:
-            user_info_open = json.load(file)
-        user_info_open[id_user]["device"] = short_name_to_full_name_device(message.text)
-        upload_json("user_info.json", user_info_open)
+        if message.text in make_list_short_name_devices():
+            id_user = str(message.from_user.id)
+            with open("user_info.json", "r") as file:
+                user_info_open = json.load(file)
+            user_info_open[id_user]["device"] = short_name_to_full_name_device(message.text)
+            upload_json("user_info.json", user_info_open)
         choose_time_delay(message)
     except Exception as e:
-        exception_handler(message, e)
+        exception_handler(message, e, 'choose_device')
 
 
 def choose_time_delay(message):
@@ -233,7 +232,7 @@ def get_delay(message):
         upload_json("user_info.json", user_info_open)
         choose_columns(message)
     except Exception as e:
-        exception_handler(message, e)
+        exception_handler(message, e, 'get_delay')
 
 
 def draw_inline_keyboard(selected_columns, ava_col):
@@ -246,7 +245,7 @@ def draw_inline_keyboard(selected_columns, ava_col):
                 callback_data=f"feature_{str(i)}",
             )
         )
-    markup.add(types.InlineKeyboardButton("Выбрано", callback_data="next"))
+    markup.add(types.InlineKeyboardButton("Построить график", callback_data="next"))
     return markup
 
 
@@ -302,11 +301,12 @@ def choose_columns(call):
                 reply_markup=draw_inline_keyboard(selected_columns, ava_col),
             )
     except Exception as e:
-        exception_handler(str(call.from_user.id), e)
+        exception_handler(int(call.from_user.id), e, 'choose_columns')
 
 
 def concat_files(message):
     id_user = str(message.from_user.id)
+    bot.send_message(id_user, 'Строю график')
     if isinstance(message, CallbackQuery):
         text = message.data
     else:
@@ -328,6 +328,7 @@ def concat_files(message):
             user_info_open = json.load(file)
         user_id = user_info_open[id_user]
     device = user_id["device"]
+    delay = user_id["delay"]
     begin_record_date = pd.to_datetime(user_id["begin_record_date"])
     end_record_date = pd.to_datetime(user_id["end_record_date"])
     current_date, combined_data = begin_record_date, pd.DataFrame()
@@ -354,6 +355,7 @@ def concat_files(message):
     cols_to_draw = user_id["selected_columns"]
     combined_data.reset_index(inplace=True)
     combined_data = combined_data.sort_values(by=time_col)
+    cols_to_draw = combined_data[cols_to_draw].mean().sort_values(ascending=False).index.tolist()
     fig = px.line(
         combined_data,
         x=time_col,
@@ -370,6 +372,8 @@ def concat_files(message):
     )
     fig.update_traces(line={'width': 2})
     fig.update_xaxes(
+        zerolinecolor='grey',
+        zerolinewidth=1,
         gridcolor='grey',
         showline=True,
         linewidth=1,
@@ -377,8 +381,11 @@ def concat_files(message):
         mirror=True,
         tickformat='%H:%M\n%d.%m.%Y',
         minor_griddash='dot',
+        range=[datetime.now() - timedelta(delay), datetime.now()]
     )
     fig.update_yaxes(
+        zerolinecolor='grey',
+        zerolinewidth=1,
         gridcolor='grey',
         showline=True,
         linewidth=1,
@@ -389,6 +396,15 @@ def concat_files(message):
     fig.write_image(f"graphs_photo/{id_user}.png")
     bot.send_photo(id_user, photo=open(f"graphs_photo/{id_user}.png", "rb"))
     plt.close()
+    make_graph_again(id_user)
+
+
+def make_graph_again(user_id):
+    markup = types.ReplyKeyboardMarkup(row_width=1)
+    btn1 = types.KeyboardButton("Да")
+    btn2 = types.KeyboardButton("Нет")
+    markup.add(btn1, btn2)
+    bot.send_message(user_id, "Построить график с другим временным диапазоном еще раз?", reply_markup=markup)
 
 
 @bot.message_handler(func=lambda message: message.text == "Свой временной промежуток")
@@ -396,7 +412,7 @@ def choose_not_default_delay(message):
     try:
         choose_not_default_start_date(message)
     except Exception as e:
-        exception_handler(message, e)
+        exception_handler(message, e, 'choose_not_default_delay')
 
 
 def choose_not_default_start_date(message):
@@ -472,7 +488,7 @@ def all_complexes(message):
         markup.add(*list(map(lambda x: types.KeyboardButton(x), make_list_complexes())))
         bot.send_message(message.chat.id, "Выберите комплекс", reply_markup=markup)
     except Exception as e:
-        exception_handler(message, e)
+        exception_handler(message, e, 'all_complexes')
 
 
 @bot.message_handler(func=lambda message: message.text in make_list_complexes())
@@ -485,7 +501,7 @@ def choose_one_complex(message):
         upload_json("user_info.json", user_info_open)
         all_devices(message)
     except Exception as e:
-        exception_handler(message, e)
+        exception_handler(message, e, 'choose_one_complex')
 
 
 @bot.message_handler(func=lambda message: message.text == "Быстрый доступ")
@@ -500,15 +516,15 @@ def quick_access(message):
             markup.add("Отрисовка графика")
         bot.send_message(message.chat.id, "Выберите действие", reply_markup=markup)
     except Exception as e:
-        exception_handler(message, e)
+        exception_handler(message, e, quick_access)
 
 
-@bot.message_handler(func=lambda message: message.text == "Отрисовка графика")
+@bot.message_handler(func=lambda message: message.text in ["Отрисовка графика"])
 def logic_draw_plot(message):
     try:
         concat_files(message)
     except Exception as e:
-        exception_handler(message, e)
+        exception_handler(message, e, 'logic_draw_plot')
 
 
 @bot.message_handler(func=lambda message: message.text == "Настроить быстрый доступ")
@@ -520,14 +536,14 @@ def update_quick_access(message):
         upload_json("user_info.json", d)
         choice_devices_or_complexes(message)
     except Exception as e:
-        exception_handler(message, e)
+        exception_handler(message, e, 'update_quick_access')
 
 
-def exception_handler(message, e):
-    logging.warning(f'Непредвиденная ошибка: {e.__class__.__name__}')
-    bot.send_message(message.from_user.id, "Непредвиденная ошибка")
+def exception_handler(message, e, name_func):
+    logging.warning(f'Непредвиденная ошибка: {e.__class__.__name__} в {name_func}')
+    bot.send_message(message if isinstance(message, int) else message.from_user.id,
+                     f"Непредвиденная ошибка в {name_func}")
     start(message)
 
 
 bot.polling(none_stop=True)
-#
