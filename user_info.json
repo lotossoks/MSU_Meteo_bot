@@ -1,1 +1,1 @@
-{"989370498": {"update_quick_access": false, "device_to_choose": [], "device": "g1", "delay": ["2024-05-01", "2024-06-11"], "quick_access": {"update_quick_access": true, "device_to_choose": ["g1"], "device": "g1", "delay": ["2024-05-01", "2024-06-11"], "selected_columns": ["e1", "d1", "b1", "c1", "e2", "f2"]}}}
+{"989370498": {"update_quick_access": false, "device_to_choose": ["mem"], "device": "mem", "delay": 2, "selected_columns": ["NO (mg/m3)"]}}

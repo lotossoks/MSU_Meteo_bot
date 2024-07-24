@@ -73,8 +73,8 @@ def get_devices_from_complex(complex_name):
 
 
 def get_time_col(graph_id):
-
     return 'timestamp'
+
 
 def make_list_cols(device):
     device_id = execute_query(
@@ -103,8 +103,17 @@ def get_color(col, device):
     device_id = execute_query(
         f'SELECT id FROM devices WHERE full_name = "{device}"', method="fetchone"
     )[0]
+    graph_ids = list(
+        map(
+            lambda x: x[0],
+            execute_query(
+                f'SELECT id FROM graphs WHERE device_id = "{device_id}"'
+            ),
+        )
+    )
+    graph_ids_str = ', '.join(f'"{graph_id}"' for graph_id in graph_ids)
     return execute_query(
-        f'SELECT color FROM columns WHERE name = "{col}" AND graph_id = "{device_id}"', method="fetchone"
+        f'SELECT color FROM columns WHERE name = "{col}" AND graph_id IN ({graph_ids_str})', method="fetchone"
     )[0]
 
 
@@ -557,7 +566,7 @@ def exception_handler(message, e, name_func):
     start(user_id, error=True)
 
 
-try:
-    bot.polling(none_stop=True)
-except Exception as error:
-    bot.send_message(-1002244175815, "Bot program crashed with the error: " + str(error))
+# try:
+bot.polling(none_stop=True)
+# except Exception as error:
+#     bot.send_message(1002244175815, "Bot program crashed with the error: " + str(error))
