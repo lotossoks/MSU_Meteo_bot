@@ -557,4 +557,7 @@ def exception_handler(message, e, name_func):
     start(user_id, error=True)
 
 
-bot.polling(none_stop=True)
+try:
+    bot.polling(none_stop=True)
+except Exception as error:
+    bot.send_message(-1002244175815, "Bot program crashed with the error: " + str(error))
