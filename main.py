@@ -46,7 +46,7 @@ def execute_query(query: str, method="fetchall"):
 
 def short_name_to_full_name_device(short_name):
     return execute_query(
-        f'SELECT full_name FROM devices WHERE name="{short_name}"',
+        f'SELECT name FROM devices WHERE name="{short_name}"',
         method="fetchone",
     )[0]
 
@@ -78,7 +78,7 @@ def get_time_col(graph_id):
 
 def make_list_cols(device):
     device_id = execute_query(
-        f'SELECT id FROM devices WHERE full_name = "{device}"', method="fetchone"
+        f'SELECT id FROM devices WHERE name = "{device}"', method="fetchone"
     )[0]
     graph_ids = list(
         map(
@@ -101,7 +101,7 @@ def make_list_cols(device):
 
 def get_color(col, device):
     device_id = execute_query(
-        f'SELECT id FROM devices WHERE full_name = "{device}"', method="fetchone"
+        f'SELECT id FROM devices WHERE name = "{device}"', method="fetchone"
     )[0]
     graph_ids = list(
         map(
