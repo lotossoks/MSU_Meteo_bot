@@ -1,1 +1,1 @@
-{"989370498": {"update_quick_access": false, "device_to_choose": [], "device": "mem", "delay": 2}}
+{"989370498": {"update_quick_access": false, "device_to_choose": ["mem"], "device": "mem", "delay": 31, "quick_access": {"update_quick_access": true, "device_to_choose": ["mem"], "device": "mem", "delay": 2, "selected_columns": ["CO (mg/m3)"]}, "selected_columns": ["NO (mg/m3)"]}}
