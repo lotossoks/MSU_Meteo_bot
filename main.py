@@ -432,7 +432,7 @@ def choose_columns(call):
             bot.send_message(
                 call.chat.id,
                 "Столбцы для выбора:",
-                reply_markup=draw_inline_keyboard(selected_columns, ava_col),
+                reply_markup=draw_inline_keyboard(sorted(selected_columns), sorted(ava_col)),
             )
     except Exception as e:
         exception_handler(int(call.from_user.id), e, 'choose_columns')
