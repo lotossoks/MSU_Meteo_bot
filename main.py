@@ -411,7 +411,7 @@ def choose_columns(call):
                 chat_id=call.message.chat.id,
                 message_id=call.message.message_id,
                 text="Нажми",
-                reply_markup=draw_inline_keyboard(selected_columns, ava_col),
+                reply_markup=draw_inline_keyboard(sorted(selected_columns), sorted(ava_col)),
             )
 
         elif text == "next":
