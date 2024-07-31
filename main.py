@@ -278,12 +278,11 @@ def all_devices(message):
     В этой функции пользователю высвечиваются все доступные для его выбора приборы
     all_devices("Просмотр всех приборов") -> choose_device(один из доступных приборов)
     """
-    list_short_name_devices = make_list_short_name_devices()
     user_id = str(message.from_user.id)
     user_info_open = load_json("user_info.json")
     # Если пользователь выбирал комплекс, то user_info_open[user_id]["device_to_choose"] уже не пустой
     if not user_info_open[user_id]["device_to_choose"]:
-        user_info_open[user_id]["device_to_choose"] = list_short_name_devices
+        user_info_open[user_id]["device_to_choose"] = make_list_short_name_devices()
         upload_json("user_info.json", user_info_open)
     # Создание кнопок на которых показаны все приборы, доступные пользователю
     markup = types.ReplyKeyboardMarkup(row_width=1)
