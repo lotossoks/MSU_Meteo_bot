@@ -176,7 +176,7 @@ def exception_decorator(func):
                 f"Непредвиденная ошибка: {e.__class__.__name__} в {name_func}"
             )
             bot.send_message(user_id, f"Непредвиденная ошибка в {name_func}")
-            start(user_id, error=True)
+            start(user_id, error_f=True)
 
     return wrapper
 
@@ -194,7 +194,7 @@ def start(message, error_f=False):
     user_id = message if error_f else str(message.from_user.id)
     user_info_open = load_json("user_info.json")
     # Обнуление параметров пользователя при крупной ошибке
-    if user_id not in user_info_open.keys() or error:
+    if user_id not in user_info_open.keys() or error_f:
         user_info_open[user_id] = {}
     # Задание стартовых параметров пользователя
     user_info_open[user_id]["update_quick_access"] = False
