@@ -723,9 +723,14 @@ def make_graph_again_ind(message):
         start(message)
 
 
-while True:  # Чтобы не падало, при временных отключениях от ТГ
-    try:
-        bot.send_message(config.id_alarm_ch, "Bot started")  # Обращение к каналу о запуске бота
+# Если существует канал об ошибках ТГ бота
+if config.id_alarm_ch != 0:
+    while True:  # Чтобы не падало, при временных отключениях от ТГ
+        try:
+            bot.send_message(config.id_alarm_ch, "Bot started")  # Обращение к каналу о запуске бота
+            bot.polling(none_stop=True)
+        except Exception as error:  # Обращение к каналу о поломке бота
+            bot.send_message(config.id_alarm_ch, "Bot program crashed with the error: " + str(error))
+else:
+    while True:  # Чтобы не падало, при временных отключениях от ТГ
         bot.polling(none_stop=True)
-    except Exception as error:  # Обращение к каналу о поломке бота
-        bot.send_message(-1002244175815, "Bot program crashed with the error: " + str(error))
