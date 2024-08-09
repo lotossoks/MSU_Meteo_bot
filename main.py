@@ -727,7 +727,7 @@ while True:
     try:
         if config.id_alarm_ch != 0:
             bot.send_message(config.id_alarm_ch, "Bot started")  # Обращение к каналу о запуске бота
-        bot.polling(none_stop=True)
+        bot.infinity_polling(timeout=10, long_polling_timeout=5)
     except Exception as error:  # Обращение к каналу о поломке бота
         if config.id_alarm_ch != 0:
             bot.send_message(config.id_alarm_ch, "Bot program crashed with the error: " + str(error))
