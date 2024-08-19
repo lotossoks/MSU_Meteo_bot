@@ -605,9 +605,11 @@ def make_graph(message):
     if isinstance(delay, int):
         end_record_date = pd.to_datetime(datetime.now().strftime("%Y-%m-%d"))
         begin_record_date = end_record_date - timedelta(delay)
+        axis_range = [datetime.now() - timedelta(delay), datetime.now()]
     else:
         end_record_date = pd.to_datetime(delay[1])
         begin_record_date = pd.to_datetime(delay[0])
+        axis_range = [begin_record_date, end_record_date]
     current_date, combined_data = begin_record_date, pd.DataFrame()
     # Соединяю файлы за разные месяца, которые могли попасть в промежуток
     while current_date <= end_record_date + timedelta(days=100):
@@ -663,6 +665,7 @@ def make_graph(message):
     )
     fig.update_traces(line={"width": 2})
     fig.update_xaxes(
+        range=axis_range,
         zerolinecolor="grey",
         zerolinewidth=1,
         gridcolor="grey",
