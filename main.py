@@ -592,13 +592,13 @@ def make_graph(message):
         user_info_open[user_id]["update_quick_access"] = False
         upload_json("user_info.json", user_info_open)
         bot.send_message(user_id, "Параметры для быстрого доступа выбраны. ")
-    # Если перешли через "Быстрый доступ" (без настройки)
+    # Если перешли через "Быстрый доступ" (без настройки) -> Замена выбранных параметров, на параметры быстрого доступа
     if text == "Отрисовка графика":
         user_info_open = load_json("user_info.json")
-        id_open = user_info_open[user_id]["quick_access"]
-    else:
-        user_info_open = load_json("user_info.json")
-        id_open = user_info_open[user_id]
+        user_info_open[user_id] = user_info_open[user_id]["quick_access"]
+        upload_json("user_info.json", user_info_open)
+    user_info_open = load_json("user_info.json")
+    id_open = user_info_open[user_id]
     device = id_open["device"]
     delay = id_open["delay"]
     # Если delay int -> стандартный промежуток иначе нет
