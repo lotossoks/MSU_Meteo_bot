@@ -510,7 +510,7 @@ def draw_inline_keyboard(selected_device_columns, ava_col):
 
 
 @bot.callback_query_handler(func=lambda call: True)
-# @exception_decorator
+@exception_decorator
 def choose_columns(call):
     """
     После выбора временного диапазона пользователь попадает сюда
@@ -565,7 +565,7 @@ def choose_columns(call):
         user_info_open = load_json("user_info.json")
         if "selected_columns" not in user_info_open[user_id].keys():
             user_info_open[user_id]["selected_columns"] = {}
-        if device not in user_info_open[user_id][user_id]["selected_columns"].keys():
+        if device not in user_info_open[user_id]["selected_columns"].keys():
             user_info_open[user_id]["selected_columns"][device] = []
         upload_json("user_info.json", user_info_open)
         selected_device_columns = user_info_open[user_id]["selected_columns"][device]
