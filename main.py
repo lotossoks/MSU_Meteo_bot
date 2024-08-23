@@ -198,7 +198,8 @@ def start(message, error_f=False):
         user_info_open[user_id] = {}
     # Задание стартовых параметров пользователя
     user_info_open[user_id]["update_quick_access"] = False
-    user_info_open[user_id].pop("selected_columns", None)
+    # Параметры выбранных столбцов сохраняются
+    # user_info_open[user_id].pop("selected_columns", None)
     user_info_open[user_id]["device_to_choose"] = []
     upload_json("user_info.json", user_info_open)
     # Создание кнопок действий
@@ -488,16 +489,16 @@ def end_record_date_choose(message):
         choose_not_default_finish_date(message)
 
 
-def draw_inline_keyboard(selected_columns, ava_col):
+def draw_inline_keyboard(selected_device_columns, ava_col):
     """
     Функция вызывается из choose_columns, когда надо вывести кнопки с ✔️/❌ в зависимости от выбора пользователя
-    :param selected_columns: выбранные столбцы
+    :param selected_device_columns: выбранные столбцы
     :param ava_col: доступные столбцы
     :return: "приукрашенные" кнопки
     """
     markup = types.InlineKeyboardMarkup(row_width=1)
     for i in ava_col:
-        emoji = " ✔️" if i in selected_columns else " ❌"
+        emoji = " ✔️" if i in selected_device_columns else " ❌"
         markup.add(
             types.InlineKeyboardButton(
                 str(i) + emoji,
@@ -522,7 +523,8 @@ def choose_columns(call):
     """
     user_id = str(call.from_user.id)
     user_info_open = load_json("user_info.json")
-    ava_col = make_list_cols(user_info_open[str(call.from_user.id)]["device"])
+    device = str(user_info_open[str(call.from_user.id)]["device"])
+    ava_col = make_list_cols(device)
     # НЕ тривиально: тк здесь существуют ответы типа CallbackQuery и у него другой метод получения текста ->
     # надо делать другой обработчик
     if isinstance(call, CallbackQuery):
@@ -531,29 +533,29 @@ def choose_columns(call):
         text = call.text
     if text.startswith("feature"):  # Изменение списка выбранных параметров
         feature = "_".join(call.data.split("feature")[1].split("_")[1::])
-        selected_features = user_info_open[user_id]["selected_columns"]
+        selected_features = user_info_open[user_id]["selected_columns"][device]
         if feature in selected_features:
             selected_features.remove(feature)
             bot.answer_callback_query(call.id, "Вы убрали столбец " + feature)
         else:
             selected_features.append(feature)
             bot.answer_callback_query(call.id, "Вы добавили столбец " + feature)
-        user_info_open[user_id]["selected_columns"] = selected_features
+        user_info_open[user_id]["selected_columns"][device] = selected_features
         upload_json("user_info.json", user_info_open)
         bot.answer_callback_query(call.id, "Вы выбрали параметр " + feature)
-        selected_columns = user_info_open[str(call.from_user.id)]["selected_columns"]
+        selected_device_columns = user_info_open[str(call.from_user.id)]["selected_columns"][device]
         bot.edit_message_text(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
             text="Нажми",
             reply_markup=draw_inline_keyboard(
-                sorted(selected_columns), sorted(ava_col)
+                sorted(selected_device_columns), sorted(ava_col)
             ),
         )
 
     elif text == "next":  # Сохранение параметром и переход дальше
         if (
-            len(json.load(open("user_info.json", "r"))[user_id]["selected_columns"])
+            len(json.load(open("user_info.json", "r"))[user_id]["selected_columns"][device])
             != 0
         ):
             make_graph(call)
@@ -562,14 +564,16 @@ def choose_columns(call):
     else:  # Стартовый вывод столбцов
         user_info_open = load_json("user_info.json")
         if "selected_columns" not in user_info_open[user_id].keys():
-            user_info_open[user_id]["selected_columns"] = []
+            user_info_open[user_id]["selected_columns"] = {}
+        if device not in user_info_open[user_id][user_id]["selected_columns"].keys():
+            user_info_open[user_id]["selected_columns"][device] = []
         upload_json("user_info.json", user_info_open)
-        selected_columns = user_info_open[user_id]["selected_columns"]
+        selected_device_columns = user_info_open[user_id]["selected_columns"][device]
         bot.send_message(
             call.chat.id,
             "Столбцы для выбора:",
             reply_markup=draw_inline_keyboard(
-                sorted(selected_columns), sorted(ava_col)
+                sorted(selected_device_columns), sorted(ava_col)
             ),
         )
 
@@ -638,7 +642,7 @@ def make_graph(message):
         ]
         combined_data.set_index(time_col, inplace=True)
         combined_data = combined_data.replace(",", ".", regex=True).astype(float)
-        cols_to_draw = id_open["selected_columns"]
+        cols_to_draw = id_open["selected_columns"][device]
         combined_data.reset_index(inplace=True)
         combined_data = combined_data.sort_values(by=time_col)
         # Сортируем столбцы таким образом, чтобы более маленькие рисовались позже
