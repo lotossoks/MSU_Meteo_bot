@@ -2,7 +2,7 @@ pyTelegramBotAPI==4.15.4
 pandas==2.2.0
 matplotlib==3.8.2
 plotly==5.18.0
-kaleido==0.2.1
+kaleido==0.1.0post1
 python-dotenv==1.0.1
 hsluv==5.0.4
 MarkupSafe==2.1.5

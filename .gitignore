@@ -4,3 +4,4 @@ proc_data
 config.py
 user_info.json
 data
+info.log
