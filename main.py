@@ -229,7 +229,7 @@ def quick_access(message):
 
 
 @bot.message_handler(func=lambda message: message.text == "Отрисовка графика")
-# @exception_decorator
+@exception_decorator
 def logic_draw_plot(message):
     """
     Если пользователь со страницы quick_access выбрал "Отрисовка графика", то он попал сюда.
