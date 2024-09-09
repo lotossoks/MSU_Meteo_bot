@@ -229,7 +229,7 @@ def quick_access(message):
 
 
 @bot.message_handler(func=lambda message: message.text == "Отрисовка графика")
-@exception_decorator
+# @exception_decorator
 def logic_draw_plot(message):
     """
     Если пользователь со страницы quick_access выбрал "Отрисовка графика", то он попал сюда.
@@ -599,7 +599,9 @@ def make_graph(message):
     # Если перешли через "Быстрый доступ" (без настройки) -> Замена выбранных параметров, на параметры быстрого доступа
     if text == "Отрисовка графика":
         user_info_open = load_json("user_info.json")
-        user_info_open[user_id] = user_info_open[user_id]["quick_access"]
+        x = user_info_open[user_id]["quick_access"].copy()
+        user_info_open[user_id] = x.copy()
+        user_info_open[user_id]["quick_access"] = x.copy()
         upload_json("user_info.json", user_info_open)
     user_info_open = load_json("user_info.json")
     id_open = user_info_open[user_id]
